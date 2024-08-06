@@ -72,7 +72,7 @@ pub fn BuildMotor(comptime timer_type: type) type {
         PI_current_q: pi_type = undefined,
         PI_current_d: pi_type = undefined,
 
-        inline fn init_timer(mot: *@This()) void {
+        inline fn init_timer(self: *@This()) void {
             // comptime func to build list of available timer types
             // then iterate through that here to find a match?
             stm32.RCC.APB2ENR.modify(.{ .TIM1EN = 1 });
@@ -88,50 +88,50 @@ pub fn BuildMotor(comptime timer_type: type) type {
             // }
 
             // should query RCC and figure out what the input clock freq is
-            mot.tim.CR1.modify(.{ .CEN = 1 });
+            self.tim.CR1.modify(.{ .CEN = 1 });
 
-            mot.tim.CR1.modify(.{ .CMS = 3 }); // center-aligned 3
-            // mot.tim.CR1.modify(.{ .URS = 1 });
-            // mot.tim.CR1.modify(.{ .ARPE = 1 }); // 1 -> ARR is buffered
-            mot.tim.CR2.modify(.{ .MMS = 0b010 }); // trgo config
+            self.tim.CR1.modify(.{ .CMS = 3 }); // center-aligned 3
+            // self.tim.CR1.modify(.{ .URS = 1 });
+            // self.tim.CR1.modify(.{ .ARPE = 1 }); // 1 -> ARR is buffered
+            self.tim.CR2.modify(.{ .MMS = 0b010 }); // trgo config
             // these 2 regs set pwm frequency together, need to do math to set them appropriately
             // center aligned pwm counts up to ARR then back down
             // so it's 2xARR clocks per period
             // max clock config is 180MHz timer clock,
             // 180MHz / 20000 = (2*4500)
-            mot.tim.PSC.modify(.{ .PSC = 0 }); // prescaler
-            mot.tim.ARR.modify(.{ .ARR = 4500 }); // auto-reload
+            self.tim.PSC.modify(.{ .PSC = 0 }); // prescaler
+            self.tim.ARR.modify(.{ .ARR = 4500 }); // auto-reload
 
             // ch1
-            mot.tim.CCER.modify(.{ .CC1E = 0 }); // disable channel for config
-            mot.tim.CCMR1_Output.modify(.{ .OC1M = 0b111 }); // CCMR1.OCxM = 0b111 output is active while CNT > CCRx
-            mot.tim.CCMR1_Output.modify(.{ .CC1S = 0 }); // 0 -> CC1 is an output, channel must be disabled to write
-            mot.tim.CCMR1_Output.modify(.{ .OC1PE = 1 }); // enable CCR preload
-            mot.tim.CCER.modify(.{ .CC1E = 1 }); // re-enable channel
+            self.tim.CCER.modify(.{ .CC1E = 0 }); // disable channel for config
+            self.tim.CCMR1_Output.modify(.{ .OC1M = 0b111 }); // CCMR1.OCxM = 0b111 output is active while CNT > CCRx
+            self.tim.CCMR1_Output.modify(.{ .CC1S = 0 }); // 0 -> CC1 is an output, channel must be disabled to write
+            self.tim.CCMR1_Output.modify(.{ .OC1PE = 1 }); // enable CCR preload
+            self.tim.CCER.modify(.{ .CC1E = 1 }); // re-enable channel
 
-            mot.tim.CCER.modify(.{ .CC2E = 0 }); // disable channel for config
-            mot.tim.CCMR1_Output.modify(.{ .OC2M = 0b111 }); // CCMR1.OCxM = 0b111 output is active while CNT > CCRx
-            mot.tim.CCMR1_Output.modify(.{ .CC2S = 0 }); // 0 -> CC1 is an output, channel must be disabled to write
-            mot.tim.CCMR1_Output.modify(.{ .OC2PE = 1 }); // enable CCR preload
-            mot.tim.CCER.modify(.{ .CC2E = 1 }); // re-enable channel
+            self.tim.CCER.modify(.{ .CC2E = 0 }); // disable channel for config
+            self.tim.CCMR1_Output.modify(.{ .OC2M = 0b111 }); // CCMR1.OCxM = 0b111 output is active while CNT > CCRx
+            self.tim.CCMR1_Output.modify(.{ .CC2S = 0 }); // 0 -> CC1 is an output, channel must be disabled to write
+            self.tim.CCMR1_Output.modify(.{ .OC2PE = 1 }); // enable CCR preload
+            self.tim.CCER.modify(.{ .CC2E = 1 }); // re-enable channel
 
-            mot.tim.CCER.modify(.{ .CC3E = 0 }); // disable channel for config
-            mot.tim.CCMR2_Output.modify(.{ .OC3M = 0b111 }); // CCMR1.OCxM = 0b111 output is active while CNT > CCRx
-            mot.tim.CCMR2_Output.modify(.{ .CC3S = 0 }); // 0 -> CC1 is an output, channel must be disabled to write
-            mot.tim.CCMR2_Output.modify(.{ .OC3PE = 1 }); // enable CCR preload
-            mot.tim.CCER.modify(.{ .CC3E = 1 }); // re-enable channel
+            self.tim.CCER.modify(.{ .CC3E = 0 }); // disable channel for config
+            self.tim.CCMR2_Output.modify(.{ .OC3M = 0b111 }); // CCMR1.OCxM = 0b111 output is active while CNT > CCRx
+            self.tim.CCMR2_Output.modify(.{ .CC3S = 0 }); // 0 -> CC1 is an output, channel must be disabled to write
+            self.tim.CCMR2_Output.modify(.{ .OC3PE = 1 }); // enable CCR preload
+            self.tim.CCER.modify(.{ .CC3E = 1 }); // re-enable channel
 
-            mot.tim.CCR1.modify(.{ .CCR1 = 1000 });
-            mot.tim.CCR2.modify(.{ .CCR2 = 1000 });
-            mot.tim.CCR3.modify(.{ .CCR3 = 1000 });
+            self.tim.CCR1.modify(.{ .CCR1 = 1000 });
+            self.tim.CCR2.modify(.{ .CCR2 = 1000 });
+            self.tim.CCR3.modify(.{ .CCR3 = 1000 });
 
-            mot.tim.BDTR.modify(.{ .MOE = 1 }); // Main Output Enable, only exists on TIM1/8?
+            self.tim.BDTR.modify(.{ .MOE = 1 }); // Main Output Enable, only exists on TIM1/8?
 
-            mot.tim.EGR.modify(.{ .UG = 1 }); // Write update bit
+            self.tim.EGR.modify(.{ .UG = 1 }); // Write update bit
         }
 
-        inline fn getPwmState(mot: @This()) bool {
-            return mot.tim.CR1.read().DIR == 0;
+        inline fn getPwmState(self: @This()) bool {
+            return self.tim.CR1.read().DIR == 0;
         }
 
         fn getPhaseCurrents(self: @This()) PhaseCurrent_s {
@@ -229,15 +229,15 @@ pub fn BuildMotor(comptime timer_type: type) type {
             self.PI_current_q.set_lpf(5 * self.current_bandwidth);
         }
 
-        fn do_hfi(mot: *@This()) void {
+        fn do_hfi(self: *@This()) void {
             stm32.GPIOC.ODR.modify(.{ .ODR10 = 1 });
             stm32.GPIOC.ODR.modify(.{ .ODR10 = 0 });
 
-            if ((mot.hfi_on == false) or (mot.enabled == false)) {
-                mot.hfi_firstcycle = true;
-                mot.hfi_int = 0;
-                mot.hfi_out = 0;
-                mot.hfi_full_turns = 0;
+            if ((self.hfi_on == false) or (self.enabled == false)) {
+                self.hfi_firstcycle = true;
+                self.hfi_int = 0;
+                self.hfi_out = 0;
+                self.hfi_full_turns = 0;
                 // stm32.GPIOC.ODR.modify(.{ .ODR10 = 0 });
                 return;
             }
@@ -250,59 +250,59 @@ pub fn BuildMotor(comptime timer_type: type) type {
             var _ca: f32 = undefined;
             var _sa: f32 = undefined;
             // var hfi_v_act:f32 = undefined;
-            approx._sincos(mot.electrical_angle, &_sa, &_ca);
+            approx._sincos(self.electrical_angle, &_sa, &_ca);
 
-            const phase_current: PhaseCurrent_s = mot.getPhaseCurrents();
+            const phase_current: PhaseCurrent_s = self.getPhaseCurrents();
             const ABcurrent: ABCurrent_s = getABCurrents(phase_current);
-            mot.current_meas.d = ABcurrent.alpha * _ca + ABcurrent.beta * _sa;
-            mot.current_meas.q = ABcurrent.beta * _ca - ABcurrent.alpha * _sa;
+            self.current_meas.d = ABcurrent.alpha * _ca + ABcurrent.beta * _sa;
+            self.current_meas.q = ABcurrent.beta * _ca - ABcurrent.alpha * _sa;
 
-            var hfi_v_act = mot.hfi_v;
+            var hfi_v_act = self.hfi_v;
 
-            if (mot.hfi_firstcycle) {
+            if (self.hfi_firstcycle) {
                 hfi_v_act /= 2.0;
-                mot.hfi_firstcycle = false;
+                self.hfi_firstcycle = false;
             }
 
-            if (mot.hfi_high) {
-                mot.current_high = mot.current_meas;
+            if (self.hfi_high) {
+                self.current_high = self.current_meas;
             } else {
-                mot.current_low = mot.current_meas;
-                hfi_v_act = -1.0 * mot.hfi_v;
+                self.current_low = self.current_meas;
+                hfi_v_act = -1.0 * self.hfi_v;
             }
 
-            mot.hfi_high = !mot.hfi_high;
+            self.hfi_high = !self.hfi_high;
 
-            mot.delta_current.q = mot.current_high.q - mot.current_low.q;
-            mot.delta_current.d = mot.current_high.d - mot.current_low.d;
+            self.delta_current.q = self.current_high.q - self.current_low.q;
+            self.delta_current.d = self.current_high.d - self.current_low.d;
 
             // hfi_curangleest = delta_current.q / (hfi_v * Ts_L );  // this is about half a us faster than vv
-            mot.hfi_curangleest = 0.5 * mot.delta_current.q / (mot.hfi_v * mot.Ts * (1.0 / mot.Lq - 1.0 / mot.Ld));
-            if (mot.hfi_curangleest > mot.error_saturation_limit) mot.hfi_curangleest = mot.error_saturation_limit;
-            if (mot.hfi_curangleest < -mot.error_saturation_limit) mot.hfi_curangleest = -mot.error_saturation_limit;
-            mot.hfi_error = -mot.hfi_curangleest;
-            mot.hfi_int += mot.Ts * mot.hfi_error * mot.hfi_gain2; //This the the double integrator
-            mot.hfi_out += mot.hfi_gain1 * mot.Ts * mot.hfi_error + mot.hfi_int; //This is the integrator and the double integrator
+            self.hfi_curangleest = 0.5 * self.delta_current.q / (self.hfi_v * self.Ts * (1.0 / self.Lq - 1.0 / self.Ld));
+            if (self.hfi_curangleest > self.error_saturation_limit) self.hfi_curangleest = self.error_saturation_limit;
+            if (self.hfi_curangleest < -self.error_saturation_limit) self.hfi_curangleest = -self.error_saturation_limit;
+            self.hfi_error = -self.hfi_curangleest;
+            self.hfi_int += self.Ts * self.hfi_error * self.hfi_gain2; //This the the double integrator
+            self.hfi_out += self.hfi_gain1 * self.Ts * self.hfi_error + self.hfi_int; //This is the integrator and the double integrator
 
-            mot.current_err.q = mot.current_setpoint.q - mot.current_meas.q;
-            mot.current_err.d = mot.current_setpoint.d - mot.current_meas.d;
+            self.current_err.q = self.current_setpoint.q - self.current_meas.q;
+            self.current_err.d = self.current_setpoint.d - self.current_meas.d;
 
             // PID contains the low pass filter
-            voltage_pid.d = mot.PI_current_d.calc(mot.current_err.d);
-            voltage_pid.q = mot.PI_current_q.calc(mot.current_err.q);
+            voltage_pid.d = self.PI_current_d.calc(self.current_err.d);
+            voltage_pid.q = self.PI_current_q.calc(self.current_err.q);
 
-            mot.voltage.d += hfi_v_act;
+            self.voltage.d += hfi_v_act;
 
             // Inverse park transform
-            mot.Ualpha = _ca * mot.voltage.d - _sa * mot.voltage.q; // -sin(angle) * Uq;
-            mot.Ubeta = _sa * mot.voltage.d + _ca * mot.voltage.q; //  cos(angle) * Uq;
+            self.Ualpha = _ca * self.voltage.d - _sa * self.voltage.q; // -sin(angle) * Uq;
+            self.Ubeta = _sa * self.voltage.d + _ca * self.voltage.q; //  cos(angle) * Uq;
 
             // Clarke transform
-            var Ua = mot.Ualpha;
-            var Ub = -0.5 * mot.Ualpha + approx._SQRT3_2 * mot.Ubeta;
-            var Uc = -0.5 * mot.Ualpha - approx._SQRT3_2 * mot.Ubeta;
+            var Ua = self.Ualpha;
+            var Ub = -0.5 * self.Ualpha + approx._SQRT3_2 * self.Ubeta;
+            var Uc = -0.5 * self.Ualpha - approx._SQRT3_2 * self.Ubeta;
 
-            center = mot.voltage_limit / 2.0;
+            center = self.voltage_limit / 2.0;
             const Umin = approx.fmin(Ua, approx.fmin(Ub, Uc));
             const Umax = approx.fmax(Ua, approx.fmax(Ub, Uc));
             center -= (Umax + Umin) / 2.0;
@@ -311,32 +311,32 @@ pub fn BuildMotor(comptime timer_type: type) type {
             Ub += center;
             Uc += center;
 
-            mot.setpwm(Ua, Ub, Uc);
+            self.setpwm(Ua, Ub, Uc);
 
-            while (mot.hfi_out < 0) {
-                mot.hfi_out += approx._2PI;
+            while (self.hfi_out < 0) {
+                self.hfi_out += approx._2PI;
             }
-            while (mot.hfi_out >= approx._2PI) {
-                mot.hfi_out -= approx._2PI;
-            }
-
-            while (mot.hfi_int < -approx._PI) {
-                mot.hfi_int += approx._2PI;
-            }
-            while (mot.hfi_int >= approx._PI) {
-                mot.hfi_int -= approx._2PI;
+            while (self.hfi_out >= approx._2PI) {
+                self.hfi_out -= approx._2PI;
             }
 
-            const d_angle = mot.hfi_out - mot.electrical_angle;
+            while (self.hfi_int < -approx._PI) {
+                self.hfi_int += approx._2PI;
+            }
+            while (self.hfi_int >= approx._PI) {
+                self.hfi_int -= approx._2PI;
+            }
+
+            const d_angle = self.hfi_out - self.electrical_angle;
             if (@abs(d_angle) > (0.8 * approx._2PI)) {
                 if (d_angle > 0.0) {
-                    mot.hfi_full_turns += -1.0;
+                    self.hfi_full_turns += -1.0;
                 } else {
-                    mot.hfi_full_turns += 1.0;
+                    self.hfi_full_turns += 1.0;
                 }
             }
 
-            mot.electrical_angle = mot.hfi_out;
+            self.electrical_angle = self.hfi_out;
 
             stm32.ADC1.SR.modify(.{ .JEOC = 0 });
             stm32.ADC2.SR.modify(.{ .JEOC = 0 });

@@ -8,26 +8,9 @@ fn root() []const u8 {
 const build_root = root();
 const KiB = 1024;
 
-pub const F446 = MicroZig.Target{
-    .preferred_format = .elf,
-    .chip = .{
-        .name = "STM32F446",
-        .cpu = MicroZig.cpus.cortex_m4f,
-        .memory_regions = &.{
-            .{ .offset = 0x08000000, .length = 512 * KiB, .kind = .flash },
-            .{ .offset = 0x20000000, .length = 128 * KiB, .kind = .ram },
-        },
-        .register_definition = .{
-            .svd = .{ .cwd_relative = build_root ++ "/hal/STM32F446.svd" },
-        },
-    },
-    .hal = .{
-        .root_source_file = .{ .cwd_relative = build_root ++ "/hal/STM32F446.zig" },
-    },
-};
-
 const targets = [_]Example{
-    .{ .target = F446, .name = "STM32F446", .file = "src/motor.zig" },
+    .{ .target = f446re, .name = "STM32F446", .file = "src/motor.zig" },
+    // .{ .target = f401cc, .name = "STM32F401", .file = "src/motor.zig" },
 };
 
 pub fn build(b: *std.Build) void {
@@ -62,4 +45,40 @@ const Example = struct {
     target: MicroZig.Target,
     name: []const u8,
     file: []const u8,
+};
+
+pub const f401cc = MicroZig.Target{
+    .preferred_format = .elf,
+    .chip = .{
+        .name = "STM32F401",
+        .cpu = MicroZig.cpus.cortex_m4f,
+        .memory_regions = &.{
+            .{ .offset = 0x08000000, .length = 256 * KiB, .kind = .flash },
+            .{ .offset = 0x20000000, .length = 64 * KiB, .kind = .ram },
+        },
+        .register_definition = .{
+            .svd = .{ .cwd_relative = build_root ++ "/hal/STM32F401.svd" },
+        },
+    },
+    .hal = .{
+        .root_source_file = .{ .cwd_relative = build_root ++ "/hal/STM32F401.zig" },
+    },
+};
+
+pub const f446re = MicroZig.Target{
+    .preferred_format = .elf,
+    .chip = .{
+        .name = "STM32F446",
+        .cpu = MicroZig.cpus.cortex_m4f,
+        .memory_regions = &.{
+            .{ .offset = 0x08000000, .length = 512 * KiB, .kind = .flash },
+            .{ .offset = 0x20000000, .length = 128 * KiB, .kind = .ram },
+        },
+        .register_definition = .{
+            .svd = .{ .cwd_relative = build_root ++ "/hal/STM32F446.svd" },
+        },
+    },
+    .hal = .{
+        .root_source_file = .{ .cwd_relative = build_root ++ "/hal/STM32F446.zig" },
+    },
 };

@@ -9,8 +9,8 @@ const build_root = root();
 const KiB = 1024;
 
 const targets = [_]Example{
-    .{ .target = f446re, .name = "STM32F446", .file = "src/motor.zig" },
-    // .{ .target = f401cc, .name = "STM32F401", .file = "src/motor.zig" },
+    .{ .target = f446re, .name = "STM32F446", .file = "src/motor.zig", .board_name = "f446_board", .bsp_file = "src/bsp/stm32f446.zig" },
+    .{ .target = f401cc, .name = "STM32F401", .file = "src/motor.zig", .board_name = "f401_board", .bsp_file = "src/bsp/stm32f401.zig" },
 };
 
 pub fn build(b: *std.Build) void {
@@ -28,6 +28,7 @@ pub fn build(b: *std.Build) void {
             .target = example.target,
             .optimize = optimize,
             .root_source_file = b.path(example.file),
+            .board = .{ .name = example.board_name, .root_source_file = b.path(example.bsp_file) },
         });
 
         // `install_firmware()` is the MicroZig pendant to `Build.installArtifact()`
@@ -45,6 +46,8 @@ const Example = struct {
     target: MicroZig.Target,
     name: []const u8,
     file: []const u8,
+    board_name: []const u8,
+    bsp_file: []const u8,
 };
 
 pub const f401cc = MicroZig.Target{

@@ -56,9 +56,47 @@ pub inline fn init_gpio() void {
     stm32.GPIOA.AFRH.modify(.{ .AFRH9 = 1 });
     stm32.GPIOA.AFRH.modify(.{ .AFRH10 = 1 });
 
+    // PC14 - timing pulses for benchmarking
     stm32.RCC.AHB1ENR.modify(.{ .GPIOCEN = 1 });
-    stm32.GPIOC.MODER.modify(.{ .MODER10 = 0b01 });
-    stm32.GPIOC.OSPEEDR.modify(.{ .OSPEEDR10 = 0b11 });
+    stm32.GPIOC.MODER.modify(.{ .MODER14 = 0b01 });
+    stm32.GPIOC.OSPEEDR.modify(.{ .OSPEEDR14 = 0b11 });
+
+    stm32.RCC.AHB1ENR.modify(.{ .GPIOBEN = 1 });
+    // PB13, PB14, PB15 - connected to LS PWM pins, but disabled for now, using 3pwm
+    stm32.GPIOB.MODER.modify(.{ //
+        .MODER13 = 0b01,
+        .MODER14 = 0b01,
+        .MODER15 = 0b01,
+    });
+    stm32.GPIOB.OSPEEDR.modify(.{ //
+        .OSPEEDR13 = 0b01,
+        .OSPEEDR14 = 0b01,
+        .OSPEEDR15 = 0b01,
+    });
+    stm32.GPIOB.ODR.modify(.{ //
+        .ODR13 = 0,
+        .ODR14 = 0,
+        .ODR15 = 0,
+    });
+
+    // PA2 - OC_ADJ - high->max current
+    // PA5 - M_PWM - HIGH->3pwm, LOW->6pwm
+    // PA6 - GAIN - LOW->10x gain, HIGH->40x gain
+    stm32.GPIOA.MODER.modify(.{ //
+        .MODER2 = 0b01,
+        .MODER5 = 0b01,
+        .MODER6 = 0b01,
+    });
+    stm32.GPIOA.OSPEEDR.modify(.{ //
+        .OSPEEDR2 = 0b01,
+        .OSPEEDR5 = 0b01,
+        .OSPEEDR6 = 0b01,
+    });
+    stm32.GPIOB.ODR.modify(.{ //
+        .ODR2 = 1,
+        .ODR5 = 0,
+        .ODR6 = 0,
+    });
 }
 
 inline fn wait_for_flag(register: anytype, field: anytype) void {
@@ -73,11 +111,13 @@ pub inline fn init_rcc() void {
     // verify we're using HSI with no PLL
 
     stm32.RCC.APB1ENR.modify(.{ .PWREN = 1 });
-    // set voltage scale 1
-    stm32.PWR.CR.modify(.{ .VOS = 0b11 });
+    // set voltage scale 2
+    stm32.PWR.CR.modify(.{ .VOS = 0b10 });
 
     // stm32.RCC.CFGR.modify(.{ .MCO1PRE = 0 });
     // stm32.RCC.CFGR.modify(.{ .MCO1 = 0b11 });
+
+    // if using USB, we should use HSE instead of HSI
 
     // HSI ON
     stm32.RCC.CR.modify(.{ .HSION = 1 });
@@ -85,7 +125,7 @@ pub inline fn init_rcc() void {
     stm32.RCC.CR.modify(.{ .PLLON = 0 });
 
     // PLLM =  /16 - min value of 2, max 63
-    const PLLM: u6 = 16;
+    const PLLM: u6 = 25;
     stm32.RCC.PLLCFGR.modify(.{
         .PLLM0 = @as(u1, PLLM & 0b1),
         .PLLM1 = @as(u1, (PLLM >> 1) & 0b1),
@@ -96,7 +136,7 @@ pub inline fn init_rcc() void {
     }); //
 
     // PLLN = x360
-    const PLLN: u9 = 360;
+    const PLLN: u9 = 336;
     stm32.RCC.PLLCFGR.modify(.{
         .PLLN0 = @as(u1, PLLN & 0b1),
         .PLLN1 = @as(u1, (PLLN >> 1) & 0b1),
@@ -127,20 +167,22 @@ pub inline fn init_rcc() void {
     // stm32.RCC.PLLCFGR.write_raw(pllcfgr);
 
     // PLLP = /2 - 0 -> 2, 1 -> 4, 2 -> 6
-    const PLLP: u2 = 0;
+    const PLLP: u2 = 1;
     stm32.RCC.PLLCFGR.modify(.{ //
         .PLLP0 = @as(u1, PLLP & 0b1), //
         .PLLP1 = @as(u1, (PLLP >> 1) & 0b1), //
     });
 
+    // PLLQ should be set to 7 for USB use
+
     // AHB Prescaler = 1
     stm32.RCC.CFGR.modify(.{ .HPRE = 0b0000 });
 
-    // APB1 Prescaler = 4
-    stm32.RCC.CFGR.modify(.{ .PPRE1 = 0b101 });
+    // APB1 Prescaler = 2 - 0b100->2, 0b101->4
+    stm32.RCC.CFGR.modify(.{ .PPRE1 = 0b100 });
 
     // APB2 Prescaler = 4
-    stm32.RCC.CFGR.modify(.{ .PPRE2 = 0b101 });
+    stm32.RCC.CFGR.modify(.{ .PPRE2 = 0b100 });
 
     // wait for HSI Ready
     wait_for_flag(&stm32.RCC.CR, "HSIRDY");
@@ -152,15 +194,15 @@ pub inline fn init_rcc() void {
     // PLLON = 1
     stm32.RCC.CR.modify(.{ .PLLON = 1 });
 
-    // set voltage mode
-    stm32.PWR.CR.modify(.{ .ODEN = 1 });
-    wait_for_flag(&stm32.PWR.CSR, "ODRDY");
-    stm32.PWR.CR.modify(.{ .ODSWEN = 1 });
-    wait_for_flag(&stm32.PWR.CSR, "ODSWRDY");
+    // set voltage mode - no Overdrive mode on f401
+    // stm32.PWR.CR.modify(.{ .ODEN = 1 });
+    // wait_for_flag(&stm32.PWR.CSR, "ODRDY");
+    // stm32.PWR.CR.modify(.{ .ODSWEN = 1 });
+    // wait_for_flag(&stm32.PWR.CSR, "ODSWRDY");
 
     // set flash wait states and ART prefetch
     stm32.FLASH.ACR.modify(.{ //
-        .LATENCY = 5,
+        .LATENCY = 2,
         .PRFTEN = 1,
         .ICEN = 1,
         .DCEN = 1,
@@ -172,11 +214,14 @@ pub inline fn init_rcc() void {
     // sys clock mux = PLLCLK
     stm32.RCC.CFGR.modify(.{ .SW0 = 0 });
     stm32.RCC.CFGR.modify(.{ .SW1 = 1 });
-    stm32.RCC.DCKCFGR.modify(.{ .TIMPRE = 1 });
+
+    // f401 has the TIMPRE bit, but the svd is wrong so it doesn't show up
+    // pg 95 of rm0368 rev5
+    // stm32.RCC.DCKCFGR.modify(.{ .TIMPRE = 1 });
 }
 
 pub fn init_adc() void {
-    stm32.RCC.APB2ENR.modify(.{ .ADC1EN = 1, .ADC2EN = 1 });
+    stm32.RCC.APB2ENR.modify(.{ .ADC1EN = 1 });
     stm32.ADC1.CR1.modify(.{ //
         .SCAN = 1,
         .JEOCIE = 1,
@@ -189,18 +234,11 @@ pub fn init_adc() void {
         .JEXTSEL = 0b0001,
         .JEXTEN = 1,
     });
-    stm32.ADC2.CR2.modify(.{
-        .ADON = 1, //
-        .CONT = 0,
-    });
     // set sequence in ADC_JSQR
     stm32.ADC1.JSQR.modify(.{ //
-        .JL = 0, // number of conversions, 0 indexed
+        .JL = 1,
         .JSQ4 = 0, //pg358 of ref manual, fill as 4-3-2-1
-    });
-    stm32.ADC2.JSQR.modify(.{ //
-        .JL = 0,
-        .JSQ4 = 1, //pg358 of ref manual, fill as 4-3-2-1
+        .JSQ3 = 1, //pg358 of ref manual, fill as 4-3-2-1
     });
 
     // sampling time 3 cycles - SMPx -> 0b0
@@ -220,12 +258,6 @@ pub fn init_adc() void {
         stm32.ADC1.SMPR2.write_raw(smpr2_val);
     }
 
-    // simultaneous mode, ADC1 and ADC2 -> CCR MULTI -> 0b00101
-    stm32.C_ADC.CCR.modify(.{ //
-        .MULT = 0b00101,
-        .ADCPRE = 0b10, // /6 prescaler
-    });
-
     stm32.GPIOA.MODER.modify(.{ //
         .MODER0 = 0b11,
         .MODER1 = 0b11,
@@ -243,17 +275,16 @@ pub fn init_adc() void {
 
 pub inline fn get_adc_vals() [2]u16 {
     const adc1_val = stm32.ADC1.JDR1.read().JDATA;
-    const adc2_val = stm32.ADC2.JDR1.read().JDATA;
+    const adc2_val = stm32.ADC1.JDR2.read().JDATA;
 
     return [2]u16{ adc1_val, adc2_val };
 }
 
 pub inline fn clear_adc_isr_flag() void {
     stm32.ADC1.SR.modify(.{ .JEOC = 0 });
-    stm32.ADC2.SR.modify(.{ .JEOC = 0 });
 }
 
 pub inline fn benchmark_toggle() void {
-    stm32.GPIOC.ODR.modify(.{ .ODR10 = 1 });
-    stm32.GPIOC.ODR.modify(.{ .ODR10 = 0 });
+    stm32.GPIOC.ODR.modify(.{ .ODR14 = 1 });
+    stm32.GPIOC.ODR.modify(.{ .ODR14 = 0 });
 }

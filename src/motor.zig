@@ -2,7 +2,8 @@ const std = @import("std");
 const microzig = @import("microzig");
 const builtin = @import("builtin");
 
-const bsp = @import("bsp/stm32f446.zig");
+// const bsp = @import("bsp/stm32f446.zig");
+const bsp = microzig.board;
 
 const stm32 = microzig.hal;
 const uart = stm32.Uart;
@@ -29,6 +30,8 @@ pub fn Driver(
 }
 
 pub fn BuildMotor(comptime timer_type: type) type {
+    const silent_hfi = false;
+
     const pwm_freq: f32 = 20000;
     const TS: f32 = 1 / pwm_freq;
     // const _1_TS: f32 = pwm_freq;
@@ -48,19 +51,22 @@ pub fn BuildMotor(comptime timer_type: type) type {
         hfi_curangleest: f32 = 0,
         hfi_error: f32 = 0,
         hfi_int: f32 = 0,
-        error_saturation_limit: f32 = 0.3,
+        error_saturation_limit: f32 = 0.1,
         Ts: f32 = TS,
-        Ld: f32 = 0.001,
-        Lq: f32 = 0.0015,
-        phase_resistance: f32 = 5,
-        voltage_power_supply: f32 = 24,
-        voltage_limit: f32 = 10.0,
-        hfi_v: f32 = 3.0,
+        Ld: f32 = 19.5e-6,
+        Lq: f32 = 26.0e-6,
+        phase_resistance: f32 = 0.09,
+        voltage_power_supply: f32 = 12,
+        voltage_limit: f32 = 5.0,
+        hfi_v: f32 = 0.2,
         amps_per_volt: f32 = 1.0,
         hfi_gain1: f32 = 750 * approx._2PI,
         hfi_gain2: f32 = 5 * approx._2PI,
         Ualpha: f32 = 0,
         Ubeta: f32 = 0,
+        Ua: f32 = 0,
+        Ub: f32 = 0,
+        Uc: f32 = 0,
 
         voltage: DQVoltage_s = .{ .d = 0, .q = 0 },
         current_meas: DQCurrent_s = .{ .d = 0, .q = 0 },
@@ -137,7 +143,7 @@ pub fn BuildMotor(comptime timer_type: type) type {
         }
 
         fn getPhaseCurrents(self: @This()) PhaseCurrent_s {
-            const volts = get_adc_vals();
+            const volts = bsp.get_adc_vals();
             const va: f32 = self.amps_per_volt * (@as(f32, @floatFromInt(volts[0])) - 2048) * (3.3 / 4096.0);
             const vb: f32 = self.amps_per_volt * (@as(f32, @floatFromInt(volts[1])) - 2048) * (3.3 / 4096.0);
             return PhaseCurrent_s{ .a = va, .b = vb, .c = 0 };
@@ -152,69 +158,8 @@ pub fn BuildMotor(comptime timer_type: type) type {
         pub fn init(self: *@This()) void {
             init_timer(self);
             // now init ADC
-            stm32.RCC.APB2ENR.modify(.{ .ADC1EN = 1, .ADC2EN = 1 });
-            stm32.ADC1.CR1.modify(.{ //
-                .SCAN = 1,
-                .JEOCIE = 1,
-            }); // enable interrupt for injected channels
-            // extern trigger rising - JEXTEN->0b01
-            // tim1 trgo - JEXTSEL->0b0001
-            stm32.ADC1.CR2.modify(.{
-                .ADON = 1, //
-                .CONT = 0,
-                .JEXTSEL = 0b0001,
-                .JEXTEN = 1,
-            });
-            stm32.ADC2.CR2.modify(.{
-                .ADON = 1, //
-                .CONT = 0,
-            });
-            // set sequence in ADC_JSQR
-            stm32.ADC1.JSQR.modify(.{ //
-                .JL = 1,
-                .JSQ4 = 0, //pg358 of ref manual, fill as 4-3-2-1
-            });
-            stm32.ADC2.JSQR.modify(.{ //
-                .JL = 1,
-                .JSQ4 = 1, //pg358 of ref manual, fill as 4-3-2-1
-            });
 
-            // sampling time 3 cycles - SMPx -> 0b0
-            // not actually setting anything right now
-            // move to func and set more later
-            const sample_time = 0b0;
-            const chan = 3;
-            if (chan > 9) {
-                var smpr1_val: u32 = stm32.ADC1.SMPR1.raw;
-                smpr1_val &= ~@as(u32, @intCast(sample_time << ((chan - 9) * sample_time)));
-                smpr1_val |= @as(u32, @intCast(sample_time << ((chan - 9) * sample_time)));
-                stm32.ADC1.SMPR1.write_raw(smpr1_val);
-            } else {
-                var smpr2_val: u32 = stm32.ADC1.SMPR2.raw;
-                smpr2_val &= ~@as(u32, @intCast(sample_time << (chan * sample_time)));
-                smpr2_val |= @as(u32, @intCast(sample_time << (chan * sample_time)));
-                stm32.ADC1.SMPR2.write_raw(smpr2_val);
-            }
-
-            // simultaneous mode, ADC1 and ADC2 -> CCR MULTI -> 0b00101
-            stm32.C_ADC.CCR.modify(.{ //
-                .MULT = 0b00101,
-                .ADCPRE = 0b10, // /6 prescaler
-            });
-
-            stm32.GPIOA.MODER.modify(.{ //
-                .MODER0 = 0b11,
-                .MODER1 = 0b11,
-            });
-
-            stm32.GPIOA.OTYPER.modify(.{ //
-                .OT0 = 0,
-                .OT1 = 0,
-            });
-
-            // maybe use JOFFSETx for setting offset
-
-            //
+            bsp.init_adc();
 
             self.PI_current_d = pi_type{ //
                 .Kp = self.Ld * self.current_bandwidth * approx._2PI,
@@ -232,22 +177,28 @@ pub fn BuildMotor(comptime timer_type: type) type {
         }
 
         fn do_hfi(self: *@This()) void {
-            stm32.GPIOC.ODR.modify(.{ .ODR10 = 1 });
-            stm32.GPIOC.ODR.modify(.{ .ODR10 = 0 });
+            bsp.benchmark_toggle();
 
             if ((self.hfi_on == false) or (self.enabled == false)) {
                 self.hfi_firstcycle = true;
                 self.hfi_int = 0;
                 self.hfi_out = 0;
                 self.hfi_full_turns = 0;
-                // stm32.GPIOC.ODR.modify(.{ .ODR10 = 0 });
+                // stm32.GPIOC.ODR.modify(.{ .ODR14 = 0 });
                 return;
             }
 
-            // const is_v0 = getPwmState();
-
+            if (!silent_hfi) {
+                const is_v0 = self.getPwmState();
+                if (!is_v0) {
+                    self.setpwm(self.Ua, self.Ub, self.Uc);
+                    bsp.benchmark_toggle();
+                    bsp.benchmark_toggle();
+                    return;
+                }
+            }
             var center: f32 = undefined;
-            var voltage_pid: DQVoltage_s = undefined;
+            // var voltage_pid: DQVoltage_s = undefined;
             // var current_err: DQCurrent_s = undefined;
             var _ca: f32 = undefined;
             var _sa: f32 = undefined;
@@ -290,8 +241,8 @@ pub fn BuildMotor(comptime timer_type: type) type {
             self.current_err.d = self.current_setpoint.d - self.current_meas.d;
 
             // PID contains the low pass filter
-            voltage_pid.d = self.PI_current_d.calc(self.current_err.d);
-            voltage_pid.q = self.PI_current_q.calc(self.current_err.q);
+            // voltage_pid.d = self.PI_current_d.calc(self.current_err.d);
+            // voltage_pid.q = self.PI_current_q.calc(self.current_err.q);
 
             self.voltage.d += hfi_v_act;
 
@@ -300,20 +251,22 @@ pub fn BuildMotor(comptime timer_type: type) type {
             self.Ubeta = _sa * self.voltage.d + _ca * self.voltage.q; //  cos(angle) * Uq;
 
             // Clarke transform
-            var Ua = self.Ualpha;
-            var Ub = -0.5 * self.Ualpha + approx._SQRT3_2 * self.Ubeta;
-            var Uc = -0.5 * self.Ualpha - approx._SQRT3_2 * self.Ubeta;
+            self.Ua = self.Ualpha;
+            self.Ub = -0.5 * self.Ualpha + approx._SQRT3_2 * self.Ubeta;
+            self.Uc = -0.5 * self.Ualpha - approx._SQRT3_2 * self.Ubeta;
 
             center = self.voltage_limit / 2.0;
-            const Umin = approx.fmin(Ua, approx.fmin(Ub, Uc));
-            const Umax = approx.fmax(Ua, approx.fmax(Ub, Uc));
+            const Umin = approx.fmin(self.Ua, approx.fmin(self.Ub, self.Uc));
+            const Umax = approx.fmax(self.Ua, approx.fmax(self.Ub, self.Uc));
             center -= (Umax + Umin) / 2.0;
 
-            Ua += center;
-            Ub += center;
-            Uc += center;
+            self.Ua += center;
+            self.Ub += center;
+            self.Uc += center;
 
-            self.setpwm(Ua, Ub, Uc);
+            if (silent_hfi) {
+                self.setpwm(self.Ua, self.Ub, self.Uc);
+            }
 
             while (self.hfi_out < 0) {
                 self.hfi_out += approx._2PI;
@@ -340,13 +293,8 @@ pub fn BuildMotor(comptime timer_type: type) type {
 
             self.electrical_angle = self.hfi_out;
 
-            stm32.ADC1.SR.modify(.{ .JEOC = 0 });
-            stm32.ADC2.SR.modify(.{ .JEOC = 0 });
-
-            stm32.GPIOC.ODR.modify(.{ .ODR10 = 1 });
-            stm32.GPIOC.ODR.modify(.{ .ODR10 = 0 });
-            stm32.GPIOC.ODR.modify(.{ .ODR10 = 1 });
-            stm32.GPIOC.ODR.modify(.{ .ODR10 = 0 });
+            bsp.benchmark_toggle();
+            bsp.benchmark_toggle();
         }
 
         fn setpwm(self: @This(), Ua: f32, Ub: f32, Uc: f32) void {
@@ -380,13 +328,6 @@ pub fn BuildMotor(comptime timer_type: type) type {
     };
 }
 
-inline fn get_adc_vals() [2]u16 {
-    const adc1_val = stm32.ADC1.JDR1.read().JDATA;
-    const adc2_val = stm32.ADC2.JDR1.read().JDATA;
-
-    return [2]u16{ adc1_val, adc2_val };
-}
-
 const M1 = BuildMotor(@TypeOf(stm32.TIM1));
 var motor_1 = M1{ .tim = stm32.TIM1 };
 
@@ -409,9 +350,7 @@ fn HardFault() callconv(.C) void {
 
 fn ADC_ISR() callconv(.C) void {
     motor_1.do_hfi();
-    // __HAL_ADC_CLEAR_FLAG(hadc, (ADC_FLAG_JSTRT | ADC_FLAG_JEOC));
-    stm32.ADC1.SR.modify(.{ .JEOC = 0 });
-    stm32.ADC2.SR.modify(.{ .JEOC = 0 });
+    bsp.clear_adc_isr_flag();
 }
 
 pub const microzig_options = .{ //

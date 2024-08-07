@@ -62,22 +62,28 @@ pub inline fn init_gpio() void {
     stm32.GPIOC.OSPEEDR.modify(.{ .OSPEEDR14 = 0b11 });
 
     stm32.RCC.AHB1ENR.modify(.{ .GPIOBEN = 1 });
-    // PB13, PB14, PB15 - connected to LS PWM pins, but disabled for now, using 3pwm
+    // PB4(enable), PB13, PB14, PB15 - connected to LS PWM pins, but disabled for now, using 3pwm
     stm32.GPIOB.MODER.modify(.{ //
-        .MODER13 = 0b01,
-        .MODER14 = 0b01,
-        .MODER15 = 0b01,
+        .MODER4 = 0b01,
+        .MODER13 = 2,
+        .MODER14 = 2,
+        .MODER15 = 2,
     });
     stm32.GPIOB.OSPEEDR.modify(.{ //
+        .OSPEEDR4 = 0b01,
         .OSPEEDR13 = 0b01,
         .OSPEEDR14 = 0b01,
         .OSPEEDR15 = 0b01,
     });
     stm32.GPIOB.ODR.modify(.{ //
+        .ODR4 = 1,
         .ODR13 = 0,
         .ODR14 = 0,
         .ODR15 = 0,
     });
+    stm32.GPIOB.AFRH.modify(.{ .AFRH13 = 1 });
+    stm32.GPIOB.AFRH.modify(.{ .AFRH14 = 1 });
+    stm32.GPIOB.AFRH.modify(.{ .AFRH15 = 1 });
 
     // PA2 - OC_ADJ - high->max current
     // PA5 - M_PWM - HIGH->3pwm, LOW->6pwm
@@ -92,9 +98,9 @@ pub inline fn init_gpio() void {
         .OSPEEDR5 = 0b01,
         .OSPEEDR6 = 0b01,
     });
-    stm32.GPIOB.ODR.modify(.{ //
-        .ODR2 = 1,
-        .ODR5 = 0,
+    stm32.GPIOA.ODR.modify(.{ //
+        .ODR2 = 0,
+        .ODR5 = 1,
         .ODR6 = 0,
     });
 }

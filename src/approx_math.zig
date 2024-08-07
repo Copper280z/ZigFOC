@@ -1,3 +1,5 @@
+const std = @import("std");
+
 const sine_array = [65]u16{ 0, 804, 1608, 2411, 3212, 4011, 4808, 5602, 6393, 7180, 7962, 8740, 9512, 10279, 11039, 11793, 12540, 13279, 14010, 14733, 15447, 16151, 16846, 17531, 18205, 18868, 19520, 20160, 20788, 21403, 22006, 22595, 23170, 23732, 24279, 24812, 25330, 25833, 26320, 26791, 27246, 27684, 28106, 28511, 28899, 29269, 29622, 29957, 30274, 30572, 30853, 31114, 31357, 31581, 31786, 31972, 32138, 32286, 32413, 32522, 32610, 32679, 32729, 32758, 32768 };
 pub const _PI: f32 = 3.14159274;
 pub const _2PI: f32 = 2.0 * _PI;
@@ -92,3 +94,34 @@ pub fn fmin(a: f32, b: f32) f32 {
 
 //     return r;
 //   }
+
+test "sine" {
+    const tol: f32 = 0.003;
+    const test_angles = [_]f32{ 0, _PI / 4, _PI / 3, _PI / 2, _PI, 2 * _PI / 3, _2PI };
+
+    for (test_angles) |angle| {
+        try std.testing.expectApproxEqAbs(@sin(angle), _sin(angle), tol);
+    }
+}
+
+test "cosine" {
+    const tol: f32 = 0.003;
+    const test_angles = [_]f32{ 0, _PI / 4, _PI / 3, _PI / 2, _PI, 2 * _PI / 3, _2PI };
+
+    for (test_angles) |angle| {
+        try std.testing.expectApproxEqAbs(@cos(angle), _cos(angle), tol);
+    }
+}
+
+test "sincos" {
+    const tol: f32 = 0.003;
+    const test_angles = [_]f32{ 0, _PI / 4, _PI / 3, _PI / 2, _PI, 2 * _PI / 3, _2PI };
+
+    for (test_angles) |angle| {
+        var sa: f32 = 0;
+        var ca: f32 = 0;
+        _sincos(angle, &sa, &ca);
+        try std.testing.expectApproxEqAbs(@cos(angle), ca, tol);
+        try std.testing.expectApproxEqAbs(@sin(angle), sa, tol);
+    }
+}

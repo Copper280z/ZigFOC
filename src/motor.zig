@@ -57,9 +57,9 @@ pub fn BuildMotor(comptime timer_type: type) type {
         Lq: f32 = 26.0e-6,
         phase_resistance: f32 = 0.09,
         voltage_power_supply: f32 = 12,
-        voltage_limit: f32 = 5.0,
-        hfi_v: f32 = 0.2,
-        amps_per_volt: f32 = 1.0,
+        voltage_limit: f32 = 11,
+        hfi_v: f32 = 0.5,
+        amps_per_volt: f32 = 20.0,
         hfi_gain1: f32 = 750 * approx._2PI,
         hfi_gain2: f32 = 5 * approx._2PI,
         Ualpha: f32 = 0,
@@ -99,8 +99,8 @@ pub fn BuildMotor(comptime timer_type: type) type {
             self.tim.CR1.modify(.{ .CEN = 1 });
 
             self.tim.CR1.modify(.{ .CMS = 3 }); // center-aligned 3
-            // self.tim.CR1.modify(.{ .URS = 1 });
-            // self.tim.CR1.modify(.{ .ARPE = 1 }); // 1 -> ARR is buffered
+            self.tim.CR1.modify(.{ .URS = 1 });
+            self.tim.CR1.modify(.{ .ARPE = 1 }); // 1 -> ARR is buffered
             self.tim.CR2.modify(.{ .MMS = 0b010 }); // trgo config
             // these 2 regs set pwm frequency together, need to do math to set them appropriately
             // center aligned pwm counts up to ARR then back down
@@ -114,27 +114,30 @@ pub fn BuildMotor(comptime timer_type: type) type {
             self.tim.CCER.modify(.{ .CC1E = 0 }); // disable channel for config
             self.tim.CCMR1_Output.modify(.{ .OC1M = 0b111 }); // CCMR1.OCxM = 0b111 output is active while CNT > CCRx
             self.tim.CCMR1_Output.modify(.{ .CC1S = 0 }); // 0 -> CC1 is an output, channel must be disabled to write
-            self.tim.CCMR1_Output.modify(.{ .OC1PE = 1 }); // enable CCR preload
+            // self.tim.CCMR1_Output.modify(.{ .OC1PE = 1 }); // enable CCR preload
             self.tim.CCER.modify(.{ .CC1E = 1 }); // re-enable channel
+            self.tim.CCER.modify(.{ .CC1NE = 1 }); // re-enable channel
 
             self.tim.CCER.modify(.{ .CC2E = 0 }); // disable channel for config
             self.tim.CCMR1_Output.modify(.{ .OC2M = 0b111 }); // CCMR1.OCxM = 0b111 output is active while CNT > CCRx
             self.tim.CCMR1_Output.modify(.{ .CC2S = 0 }); // 0 -> CC1 is an output, channel must be disabled to write
-            self.tim.CCMR1_Output.modify(.{ .OC2PE = 1 }); // enable CCR preload
+            // self.tim.CCMR1_Output.modify(.{ .OC2PE = 1 }); // enable CCR preload
             self.tim.CCER.modify(.{ .CC2E = 1 }); // re-enable channel
+            self.tim.CCER.modify(.{ .CC2NE = 1 }); // re-enable channel
 
             self.tim.CCER.modify(.{ .CC3E = 0 }); // disable channel for config
             self.tim.CCMR2_Output.modify(.{ .OC3M = 0b111 }); // CCMR1.OCxM = 0b111 output is active while CNT > CCRx
             self.tim.CCMR2_Output.modify(.{ .CC3S = 0 }); // 0 -> CC1 is an output, channel must be disabled to write
-            self.tim.CCMR2_Output.modify(.{ .OC3PE = 1 }); // enable CCR preload
+            // self.tim.CCMR2_Output.modify(.{ .OC3PE = 1 }); // enable CCR preload
             self.tim.CCER.modify(.{ .CC3E = 1 }); // re-enable channel
+            self.tim.CCER.modify(.{ .CC3NE = 1 }); // re-enable channel
 
             self.tim.CCR1.modify(.{ .CCR1 = 1000 });
             self.tim.CCR2.modify(.{ .CCR2 = 1000 });
             self.tim.CCR3.modify(.{ .CCR3 = 1000 });
 
-            self.tim.BDTR.modify(.{ .MOE = 1 }); // Main Output Enable, only exists on TIM1/8?
-
+            self.tim.BDTR.modify(.{ .MOE = 1, .DTG = 0x10 }); // Main Output Enable, only exists on TIM1/8?
+            // if 6pwm then BDTR.DTG needs to be set, 0x10 gives ~300ns dead time
             self.tim.EGR.modify(.{ .UG = 1 }); // Write update bit
         }
 
@@ -198,7 +201,7 @@ pub fn BuildMotor(comptime timer_type: type) type {
                 }
             }
             var center: f32 = undefined;
-            // var voltage_pid: DQVoltage_s = undefined;
+            var voltage_pid: DQVoltage_s = undefined;
             // var current_err: DQCurrent_s = undefined;
             var _ca: f32 = undefined;
             var _sa: f32 = undefined;
@@ -241,8 +244,11 @@ pub fn BuildMotor(comptime timer_type: type) type {
             self.current_err.d = self.current_setpoint.d - self.current_meas.d;
 
             // PID contains the low pass filter
-            // voltage_pid.d = self.PI_current_d.calc(self.current_err.d);
-            // voltage_pid.q = self.PI_current_q.calc(self.current_err.q);
+            voltage_pid.d = self.PI_current_d.calc(self.current_err.d);
+            voltage_pid.q = self.PI_current_q.calc(self.current_err.q);
+
+            self.voltage.d = voltage_pid.d;
+            self.voltage.d = voltage_pid.q;
 
             self.voltage.d += hfi_v_act;
 
@@ -298,25 +304,25 @@ pub fn BuildMotor(comptime timer_type: type) type {
         }
 
         fn setpwm(self: @This(), Ua: f32, Ub: f32, Uc: f32) void {
-            const Ua_c = constrain(Ua, self.voltage_limit);
-            const Ub_c = constrain(Ub, self.voltage_limit);
-            const Uc_c = constrain(Uc, self.voltage_limit);
+            const Ua_c = constrain(Ua, self.voltage_limit, -self.voltage_limit);
+            const Ub_c = constrain(Ub, self.voltage_limit, -self.voltage_limit);
+            const Uc_c = constrain(Uc, self.voltage_limit, -self.voltage_limit);
 
             const arr: f32 = @floatFromInt(self.tim.ARR.read().ARR);
-            const dc_a = constrain(Ua_c / self.voltage_power_supply, 1.0);
-            const dc_b = constrain(Ub_c / self.voltage_power_supply, 1.0);
-            const dc_c = constrain(Uc_c / self.voltage_power_supply, 1.0);
+            const dc_a = constrain(Ua_c / self.voltage_power_supply, 1.0, 0.0);
+            const dc_b = constrain(Ub_c / self.voltage_power_supply, 1.0, 0.0);
+            const dc_c = constrain(Uc_c / self.voltage_power_supply, 1.0, 0.0);
             self.tim.CCR1.modify(.{ .CCR1 = @as(u16, @intFromFloat(dc_a * arr)) });
             self.tim.CCR2.modify(.{ .CCR2 = @as(u16, @intFromFloat(dc_b * arr)) });
             self.tim.CCR3.modify(.{ .CCR3 = @as(u16, @intFromFloat(dc_c * arr)) });
         }
 
-        fn constrain(val: f32, limit: f32) f32 {
+        inline fn constrain(val: f32, upper_limit: f32, lower_limit: f32) f32 {
             var out = val;
-            if (out > limit) {
-                out = limit;
-            } else if (out < -limit) {
-                out = -limit;
+            if (val > upper_limit) {
+                out = upper_limit;
+            } else if (val < -lower_limit) {
+                out = -lower_limit;
             }
             return out;
         }
@@ -448,13 +454,13 @@ pub fn main() !void {
     //     tx(chr);
     // }
 
-    var sp: f32 = 0;
-    const sp_p: *volatile f32 = &sp;
+    // var sp: f32 = 0;
+    // const sp_p: *volatile f32 = &sp;
 
     motor_1.init();
     motor_1.enabled = true;
     motor_1.hfi_on = true;
-    // var state = false;
+    var state = false;
     for ("starting loop\r\n") |chr| {
         bsp.tx(chr);
     }
@@ -464,22 +470,21 @@ pub fn main() !void {
 
     while (true) {
         var i: u32 = 0;
-        while (i < 800) {
+        while (i < 8_000_000) {
             asm volatile ("nop");
             i += 1;
         }
 
-        // if (state) {
-        //     // motor_1.enabled = true;
-        //     // motor_1.driver().setPwm(0.5, 1.0, 1.0);
-        //     state = false;
-        // } else {
-        //     motor_1.driver().setPwm(0.25, 1.0, 1.0);
-        //     // motor_1.enabled = false;
-        //     state = true;
-        // }
+        if (state) {
+            // motor_1.enabled = true;
+            motor_1.current_setpoint = .{ .q = 3.0 };
+            state = false;
+        } else {
+            motor_1.current_setpoint = .{ .q = 0.0 };
+            // motor_1.enabled = false;
+            state = true;
+        }
 
         // motor_1.do_hfi();
-        motor_1.current_setpoint = .{ .q = sp_p.* };
     }
 }

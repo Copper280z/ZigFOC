@@ -1,6 +1,7 @@
 const std = @import("std");
 const microzig = @import("microzig");
 const builtin = @import("builtin");
+const itm = @import("itm.zig");
 
 // const bsp = @import("bsp/stm32f446.zig");
 const bsp = microzig.board;
@@ -450,6 +451,16 @@ pub fn main() !void {
     for ("\r\nuart active\r\n") |chr| {
         bsp.tx(chr);
     }
+
+    stm32.GPIOB.MODER.modify(.{ .MODER3 = 2 });
+    stm32.GPIOB.OSPEEDR.modify(.{ .OSPEEDR3 = 0b11 });
+    stm32.GPIOB.AFRL.modify(.{ .AFRL3 = 0 });
+
+    itm.enable_itm();
+
+    for ("\r\nITM active\r\n") |chr| {
+        itm.ITM_SendChar(chr);
+    }
     // for ("motor instanced\r\n") |chr| {
     //     tx(chr);
     // }
@@ -470,7 +481,7 @@ pub fn main() !void {
 
     while (true) {
         var i: u32 = 0;
-        while (i < 8_000_000) {
+        while (i < 800) {
             asm volatile ("nop");
             i += 1;
         }
@@ -479,10 +490,20 @@ pub fn main() !void {
             // motor_1.enabled = true;
             motor_1.current_setpoint = .{ .q = 3.0 };
             state = false;
+            for ("\r\nITM current high\r\n") |chr| {
+                itm.ITM_SendChar(chr);
+            }
         } else {
             motor_1.current_setpoint = .{ .q = 0.0 };
             // motor_1.enabled = false;
             state = true;
+            for ("\r\nITM current low\r\n") |chr| {
+                itm.ITM_SendChar(chr);
+            }
+        }
+
+        for ("starting loop\r\n") |chr| {
+            bsp.tx(chr);
         }
 
         // motor_1.do_hfi();

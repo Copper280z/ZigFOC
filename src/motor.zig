@@ -452,9 +452,9 @@ pub fn main() !void {
         bsp.tx(chr);
     }
 
-    stm32.GPIOB.MODER.modify(.{ .MODER3 = 2 });
-    stm32.GPIOB.OSPEEDR.modify(.{ .OSPEEDR3 = 0b11 });
-    stm32.GPIOB.AFRL.modify(.{ .AFRL3 = 0 });
+    // stm32.GPIOB.MODER.modify(.{ .MODER3 = 2 });
+    // stm32.GPIOB.OSPEEDR.modify(.{ .OSPEEDR3 = 0b11 });
+    // stm32.GPIOB.AFRL.modify(.{ .AFRL3 = 0 });
 
     itm.enable_itm();
 

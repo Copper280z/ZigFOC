@@ -4,36 +4,21 @@ const microzig = @import("microzig");
 const mmio = microzig.mmio;
 pub const peripherals = microzig.chip.peripherals;
 
-// this sorta works, there's some output on the SWO pin, but nothing like I'm expecting
-// I'm npt sure if I'm configuring it wrong, using it wrong
-// or expecting something it's not meant for
-
-const TPI: *volatile u32 = @ptrFromInt(0xE0040000);
-const ACPR: *volatile u32 = @ptrFromInt(0xE0040000 + 0x010);
-const SPPR: *volatile u32 = @ptrFromInt(0xE0040000 + 0x0F0);
-const FFCR: *volatile u32 = @ptrFromInt(0xE0040000 + 0x304);
-
 pub fn enable_itm(cpu_freq: u32, baud: u32) void {
     const SWOPrescaler = (cpu_freq / baud) - 1;
     CoreDebug.DEMCR.raw = 1 << 24;
     peripherals.DBG.DBGMCU_CR.raw = 0x27;
 
-    // TPIU.SPPR.modify(.{ .TXMODE = 0x2});
-    // TPIU.SPPR.raw = 0x2;
-    SPPR.* = 0x2;
+    TPIU.SPPR.modify(.{ .TXMODE = 0x2 });
 
-    // TPIU.ACPR.modify(.{ .SWOSCALER = SWOPrescaler });
-    // TPIU.ACPR.raw = SWOPrescaler;
-    ACPR.* = SWOPrescaler;
+    TPIU.ACPR.modify(.{ .SWOSCALER = @as(u16, @intCast(SWOPrescaler)) });
 
     ITM.LAR.raw = 0xC5ACCE55;
-    // ITM.TCR.modify(.{ .SYNCENA = 1, .ITMENA = 1, .TraceBusID = 1 });
-    ITM.TCR.raw = 0x0001000D;
+    ITM.TCR.modify(.{ .SYNCENA = 1, .ITMENA = 1, .TraceBusID = 1 });
     ITM.TPR.raw = 0xFFFFFFFF;
     ITM.TER.raw = 0x1;
     DWT.CTRL.raw = 0x400003FE;
-    // TPIU.FFCR.raw = 0x100;
-    FFCR.* = 0x100;
+    TPIU.FFCR.raw = 0x100;
 }
 
 pub inline fn ITM_SendChar(ch: u8) void {

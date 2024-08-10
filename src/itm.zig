@@ -21,16 +21,58 @@ pub fn enable_itm(cpu_freq: u32, baud: u32) void {
     TPIU.FFCR.raw = 0x100;
 }
 
-pub inline fn ITM_SendChar(ch: u8) void {
+const WriteError = error{};
+pub const Writer = std.io.Writer(c_uint, WriteError, struct {
+    pub fn write(context: c_uint, payload: []const u8) WriteError!usize {
+        _ = context;
+        for (payload) |chr| {
+            ITM_SendChar(chr);
+        }
+        return payload.len;
+    }
+}.write);
+
+var default_log_writter: Writer = .{ .context = 0 };
+
+pub fn log(
+    comptime level: std.log.Level,
+    comptime scope: @TypeOf(.EnumLiteral),
+    comptime format: []const u8,
+    args: anytype,
+) void {
+    // Need to have Clock config nailed down and stored at comptime before this really works.
+    // const state = struct {
+    //     var init = false;
+    // };
+
+    // if (!state.init) {
+    //     enable_itm();
+    //     state.init = true;
+    // }
+    const level_prefix = comptime "[{}.{:0>6}] " ++ level.asText();
+    const prefix = comptime level_prefix ++ switch (scope) {
+        .default => ": ",
+        else => " (" ++ @tagName(scope) ++ "): ",
+    };
+    for (format) |chr| {
+        ITM_SendChar(chr);
+    }
+    default_log_writter.print(prefix ++ format ++ "\r\n", .{ 0, 0 } ++ args) catch {};
+}
+
+pub inline fn ITM_SendChar(chr: u8) void {
     // if ((ITM.TCR.read().ITMENA == 1)) {
-    while (ITM.PORT[0].raw == 0) {
+    while ((ITM.PORT[0].raw & 0x1) == 0) {
         asm volatile ("nop");
     }
-    const ptr = @intFromPtr(&ITM.PORT[0].raw);
-    const u8_ptr = @as(*volatile u8, @ptrFromInt(ptr));
-    u8_ptr.* = @as(u8, ch);
-    // }
-    // return ch;
+    const itm_stim_u8: *volatile u8 = @ptrCast(&ITM.PORT[0].raw);
+    itm_stim_u8.* = chr;
+}
+
+pub inline fn static_print(msg: []const u8) void {
+    for (msg) |chr| {
+        ITM_SendChar(chr);
+    }
 }
 
 pub const ITM: *volatile types.ITM = @ptrFromInt(0xE0000000);

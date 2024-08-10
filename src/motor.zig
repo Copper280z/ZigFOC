@@ -3,7 +3,7 @@ const microzig = @import("microzig");
 const builtin = @import("builtin");
 const itm = @import("itm.zig");
 // const rtt = @import("rtt");
-// const logger = std.log.scoped(.main);
+const logger = std.log.scoped(.main);
 
 const bsp = microzig.board;
 const stm32 = microzig.hal;
@@ -370,7 +370,7 @@ pub const microzig_options = .{ //
 
 pub const std_options = .{
     .log_level = .debug,
-    .logFn = &bsp.tx,
+    .logFn = itm.log,
 };
 
 pub fn enable_interrupt(IRQn: stm32.IRQn_Type) void {
@@ -420,13 +420,14 @@ pub fn main() !void {
     stm32.peripherals.FPU_CPACR.CPACR.modify(.{ .CP = 0b1111 });
     // stm32.cpu.peripherals.SysTick.CTRL.modify(.{ .ENABLE = 1 });
     bsp.init_rcc();
+    itm.enable_itm(180000000, 2000000);
 
     bsp.init_gpio();
     bsp.init_uart();
     for ("\r\nuart active\r\n") |chr| {
         bsp.tx(chr);
     }
-    itm.enable_itm(180000000, 2000000);
+    logger.info("UART up\n", .{});
 
     motor_1.init();
     motor_1.enabled = true;
@@ -435,18 +436,20 @@ pub fn main() !void {
     for ("starting loop\r\n") |chr| {
         bsp.tx(chr);
     }
+    const printer: itm.Writer = .{ .context = 0 };
+    // logger.info("Starting loop!\n", .{});
+    // try printer.print("Starting loop!\n", .{});
+    itm.static_print("print static starting Loop!\n");
+
     // ADC_IRQn = 18
     enable_interrupt(stm32.IRQn_Type.ADC_IRQn);
     stm32.cpu.enable_interrupts();
 
     while (true) {
-        for ("ABCDEFG") |chr| {
-            var i: u32 = 0;
-            while (i < 80_000) {
-                asm volatile ("nop");
-                i += 1;
-            }
-            itm.ITM_SendChar(chr);
+        var i: u32 = 0;
+        while (i < 80_000) {
+            asm volatile ("nop");
+            i += 1;
         }
 
         if (state) {
@@ -457,6 +460,12 @@ pub fn main() !void {
             motor_1.current_setpoint = .{ .q = 0.0 };
             // motor_1.enabled = false;
             state = true;
+        }
+        logger.info("about to print\n", .{});
+        printer.print("Starting loop!\n", .{}) catch {};
+        itm.static_print("print static Loop!\n");
+        for ("Loop\r\n") |chr| {
+            bsp.tx(chr);
         }
         // logger.debug("current: {}!", motor_1.current_setpoint.q);
         // motor_1.do_hfi();

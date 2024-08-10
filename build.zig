@@ -17,6 +17,8 @@ pub fn build(b: *std.Build) void {
     const microzig = MicroZig.init(b, .{});
     const optimize = b.standardOptimizeOption(.{});
 
+    const rtt_dep = b.dependency("rtt", .{}).module("rtt");
+
     for (targets) |example| {
         // `add_firmware` basically works like addExecutable, but takes a
         // `microzig.Target` for target instead of a `std.zig.CrossTarget`.
@@ -30,6 +32,8 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path(example.file),
             .board = .{ .name = example.board_name, .root_source_file = b.path(example.bsp_file) },
         });
+        // firmware.add_app_import("rtt", rtt_dep, .{});
+        _ = rtt_dep;
 
         // `install_firmware()` is the MicroZig pendant to `Build.installArtifact()`
         // and allows installing the firmware as a typical firmware file.

@@ -2,15 +2,38 @@ const std = @import("std");
 const builtin = @import("builtin");
 const microzig = @import("microzig");
 const mmio = microzig.mmio;
+pub const peripherals = microzig.chip.peripherals;
 
-pub fn enable_itm() void {
-    CoreDebug.DEMCR.raw |= 1 << 24;
+// this sorta works, there's some output on the SWO pin, but nothing like I'm expecting
+// I'm npt sure if I'm configuring it wrong, using it wrong
+// or expecting something it's not meant for
+
+const TPI: *volatile u32 = @ptrFromInt(0xE0040000);
+const ACPR: *volatile u32 = @ptrFromInt(0xE0040000 + 0x010);
+const SPPR: *volatile u32 = @ptrFromInt(0xE0040000 + 0x0F0);
+const FFCR: *volatile u32 = @ptrFromInt(0xE0040000 + 0x304);
+
+pub fn enable_itm(cpu_freq: u32, baud: u32) void {
+    const SWOPrescaler = (cpu_freq / baud) - 1;
+    CoreDebug.DEMCR.raw = 1 << 24;
+    peripherals.DBG.DBGMCU_CR.raw = 0x27;
+
+    // TPIU.SPPR.modify(.{ .TXMODE = 0x2});
+    // TPIU.SPPR.raw = 0x2;
+    SPPR.* = 0x2;
+
+    // TPIU.ACPR.modify(.{ .SWOSCALER = SWOPrescaler });
+    // TPIU.ACPR.raw = SWOPrescaler;
+    ACPR.* = SWOPrescaler;
+
     ITM.LAR.raw = 0xC5ACCE55;
-    ITM.TCR.modify(.{ .SWOENA = 1, .ITMENA = 1 });
-    ITM.TER.raw = 0xFFFF;
-    ITM.TPR.raw = 0x0;
-    TPIU.ACPR.modify(.{ .SWOSCALER = 90 });
-    TPIU.SPPR.modify(.{ .TXMODE = 0b01 });
+    // ITM.TCR.modify(.{ .SYNCENA = 1, .ITMENA = 1, .TraceBusID = 1 });
+    ITM.TCR.raw = 0x0001000D;
+    ITM.TPR.raw = 0xFFFFFFFF;
+    ITM.TER.raw = 0x1;
+    DWT.CTRL.raw = 0x400003FE;
+    // TPIU.FFCR.raw = 0x100;
+    FFCR.* = 0x100;
 }
 
 pub inline fn ITM_SendChar(ch: u8) void {
@@ -18,7 +41,9 @@ pub inline fn ITM_SendChar(ch: u8) void {
     while (ITM.PORT[0].raw == 0) {
         asm volatile ("nop");
     }
-    ITM.PORT[0].raw = @as(u32, ch);
+    const ptr = @intFromPtr(&ITM.PORT[0].raw);
+    const u8_ptr = @as(*volatile u8, @ptrFromInt(ptr));
+    u8_ptr.* = @as(u8, ch);
     // }
     // return ch;
 }
@@ -26,11 +51,80 @@ pub inline fn ITM_SendChar(ch: u8) void {
 pub const ITM: *volatile types.ITM = @ptrFromInt(0xE0000000);
 pub const CoreDebug: *volatile types.CoreDebug = @ptrFromInt(0xE000EDF0);
 pub const TPIU: *volatile types.TPIU = @ptrFromInt(0xE0040000);
+pub const DWT: *volatile types.DWT = @ptrFromInt(0xE0001000);
 // Cortex-M4 ROM table components
 // 0xE00FF00C ITM val->0xFFF01003
 // Reads as 0xFFF01002 if no ITM is implemented.
 
 pub const types = struct {
+    pub const DWT = extern struct {
+        CTRL: mmio.Mmio(packed struct(u32) { //
+            CTRL: u32,
+        }),
+        CYCCNT: mmio.Mmio(packed struct(u32) { //
+            CYCCNT: u32,
+        }),
+        EXCCNT: mmio.Mmio(packed struct(u32) { //
+            EXCCNT: u32,
+        }),
+        SLEEPCNT: mmio.Mmio(packed struct(u32) { //
+            SLEEPCNT: u32,
+        }),
+        LSUCNT: mmio.Mmio(packed struct(u32) { //
+            LSUCNT: u32,
+        }),
+        FOLDCNT: mmio.Mmio(packed struct(u32) { //
+            FOLDCNT: u32,
+        }),
+        PCSR: mmio.Mmio(packed struct(u32) { //
+            PCSR: u32,
+        }),
+        COMP0: mmio.Mmio(packed struct(u32) { //
+            COMP0: u32,
+        }),
+        MASK0: mmio.Mmio(packed struct(u32) { //
+            MASK0: u32,
+        }),
+        FUNCTION0: mmio.Mmio(packed struct(u32) { //
+            FUNCTION0: u32,
+        }),
+        reserved0: mmio.Mmio(packed struct(u32) { //
+            reserved: u32,
+        }),
+        COMP1: mmio.Mmio(packed struct(u32) { //
+            COMP1: u32,
+        }),
+        MASK1: mmio.Mmio(packed struct(u32) { //
+            MASK1: u32,
+        }),
+        FUNCTION1: mmio.Mmio(packed struct(u32) { //
+            FUNCTION1: u32,
+        }),
+        reserved1: mmio.Mmio(packed struct(u32) { //
+            reserved: u32,
+        }),
+        COMP2: mmio.Mmio(packed struct(u32) { //
+            COMP2: u32,
+        }),
+        MASK2: mmio.Mmio(packed struct(u32) { //
+            MASK2: u32,
+        }),
+        FUNCTION2: mmio.Mmio(packed struct(u32) { //
+            FUNCTION2: u32,
+        }),
+        reserved2: mmio.Mmio(packed struct(u32) { //
+            reserved: u32,
+        }),
+        COMP3: mmio.Mmio(packed struct(u32) { //
+            COMP3: u32,
+        }),
+        MASK3: mmio.Mmio(packed struct(u32) { //
+            MASK3: u32,
+        }),
+        FUNCTION3: mmio.Mmio(packed struct(u32) { //
+            FUNCTION3: u32,
+        }),
+    };
     pub const TPIU = extern struct {
         SSPSR: mmio.Mmio(packed struct(u32) { //
             SWIDTH: u32,
@@ -38,15 +132,66 @@ pub const types = struct {
         CSPSR: mmio.Mmio(packed struct(u32) { //
             CWIDTH: u32,
         }),
+        reserved0: [2]mmio.Mmio(packed struct(u32) { //
+            reserved: u32,
+        }),
         ACPR: mmio.Mmio(packed struct(u32) {
             reserved0: u16,
             SWOSCALER: u16,
+        }),
+        reserved1: [55]mmio.Mmio(packed struct(u32) { //
+            reserved: u32,
         }),
         SPPR: mmio.Mmio(packed struct(u32) {
             reserved: u30,
             TXMODE: u2,
         }),
-        TYPE: mmio.Mmio(packed struct(u32) { //
+        reserved2: [131]mmio.Mmio(packed struct(u32) { //
+            reserved: u32,
+        }),
+        FFSR: mmio.Mmio(packed struct(u32) {
+            FFSR: u32,
+        }),
+        FFCR: mmio.Mmio(packed struct(u32) {
+            FFCR: u32,
+        }),
+        reserved3: [759]mmio.Mmio(packed struct(u32) { //
+            reserved: u32,
+        }),
+        TRIGGER: mmio.Mmio(packed struct(u32) {
+            TRIGGER: u32,
+        }),
+        FIFO0: mmio.Mmio(packed struct(u32) {
+            FIFO0: u32,
+        }),
+        ITATTBCTR2: mmio.Mmio(packed struct(u32) {
+            ITATTBCTR2: u32,
+        }),
+        reserved4: mmio.Mmio(packed struct(u32) { //
+            reserved: u32,
+        }),
+        ITATBCTR0: mmio.Mmio(packed struct(u32) {
+            ITATBCTR0: u32,
+        }),
+        FIFO1: mmio.Mmio(packed struct(u32) {
+            FIFO1: u32,
+        }),
+        ITCTRL: mmio.Mmio(packed struct(u32) {
+            ITCTRL: u32,
+        }),
+        reserved5: [39]mmio.Mmio(packed struct(u32) { //
+            reserved: u32,
+        }),
+        CLAIMSET: mmio.Mmio(packed struct(u32) { //
+            CLAIMSET: u32,
+        }),
+        CLAIMCLR: mmio.Mmio(packed struct(u32) { //
+            CLAIMCLR: u32,
+        }),
+        reserved7: [8]mmio.Mmio(packed struct(u32) { // yeah, 7, that's what core_cm4.h says
+            reserved: u32,
+        }),
+        DEVID: mmio.Mmio(packed struct(u32) { //
             reserved: u16,
             impl0: u4,
             NRZVALID: u1,
@@ -54,6 +199,9 @@ pub const types = struct {
             PTINVALID: u1,
             FIFOSZ: u3,
             impl1: u6,
+        }),
+        DEVTYPE: [39]mmio.Mmio(packed struct(u32) { //
+            DEVTYPE: u32,
         }),
     };
     pub const CoreDebug = extern struct {

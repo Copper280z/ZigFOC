@@ -4,6 +4,10 @@
     .dependencies = .{
         .@"microzig/build" = .{ .path = "../microzig/build" },
         .@"microzig/bsp/stmicro/stm32" = .{ .path = "../microzig/bsp/stmicro/stm32" },
+        .rtt = .{
+            .url = "https://github.com/elpekenin/segger-rtt/archive/refs/heads/time_getter.tar.gz",
+            .hash = "12206812bf16e697049b257fbccba955113a076f470b6e39e064e9f43e3febc249c7",
+        },
     },
 
     .paths = .{

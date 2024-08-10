@@ -18,6 +18,7 @@ pub const ADC2 = peripherals.ADC2;
 pub const ADC3 = peripherals.ADC3;
 pub const C_ADC = peripherals.C_ADC;
 pub const USART2 = peripherals.USART2;
+pub const DBG = peripherals.DBG;
 
 pub const IRQn_Type = enum(u8) {
     //******  Cortex-M4 Processor Exceptions Numbers ****************************************************************/

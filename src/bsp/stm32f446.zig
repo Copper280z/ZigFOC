@@ -80,12 +80,12 @@ pub inline fn init_rcc() void {
     // stm32.RCC.CFGR.modify(.{ .MCO1 = 0b11 });
 
     // HSI ON
-    stm32.RCC.CR.modify(.{ .HSION = 1 });
+    stm32.RCC.CR.modify(.{ .HSION = 1, .HSEON = 1 });
     // PLLON = 0
     stm32.RCC.CR.modify(.{ .PLLON = 0 });
 
     // PLLM =  /16 - min value of 2, max 63
-    const PLLM: u6 = 16;
+    const PLLM: u6 = 8;
     stm32.RCC.PLLCFGR.modify(.{
         .PLLM0 = @as(u1, PLLM & 0b1),
         .PLLM1 = @as(u1, (PLLM >> 1) & 0b1),
@@ -144,10 +144,11 @@ pub inline fn init_rcc() void {
 
     // wait for HSI Ready
     wait_for_flag(&stm32.RCC.CR, "HSIRDY");
+    wait_for_flag(&stm32.RCC.CR, "HSERDY");
 
     // now it's safe to change the sys clock source
     // PLL Source Mux = HSI
-    stm32.RCC.PLLCFGR.modify(.{ .PLLSRC = 0 });
+    stm32.RCC.PLLCFGR.modify(.{ .PLLSRC = 1 });
 
     // PLLON = 1
     stm32.RCC.CR.modify(.{ .PLLON = 1 });

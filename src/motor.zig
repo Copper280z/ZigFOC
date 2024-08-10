@@ -2,11 +2,12 @@ const std = @import("std");
 const microzig = @import("microzig");
 const builtin = @import("builtin");
 const itm = @import("itm.zig");
+// const rtt = @import("rtt");
+// const logger = std.log.scoped(.main);
 
-// const bsp = @import("bsp/stm32f446.zig");
 const bsp = microzig.board;
-
 const stm32 = microzig.hal;
+
 const uart = stm32.Uart;
 const Handler = stm32.interrupt.Handler;
 
@@ -367,35 +368,9 @@ pub const microzig_options = .{ //
     },
 };
 
-pub fn log(
-    comptime _: std.log.Level,
-    comptime _: @TypeOf(.EnumLiteral),
-    comptime format: []const u8,
-    _: anytype,
-) void {
-    // const level_prefix = comptime "[{}.{:0>6}] " ++ level.asText();
-    // const _ = comptime level_prefix ++ switch (scope) {
-    //     .default => ": ",
-    //     else => " (" ++ @tagName(scope) ++ "): ",
-    // };
-
-    // const current_time = time.get_time_since_boot();
-    // const seconds = current_time.to_us() / std.time.us_per_s;
-    // const microseconds = current_time.to_us() % std.time.us_per_s;
-
-    // var buf: [1024]u8 = undefined;
-    // const msg = try std.bufPrint(&buf, prefix ++ format ++ "\r\n", args);
-    for ("WOO LOGGING\r\n") |chr| {
-        bsp.tx(chr);
-    }
-    for (format) |chr| {
-        bsp.tx(chr);
-    }
-}
-
 pub const std_options = .{
     .log_level = .debug,
-    .logFn = log,
+    .logFn = &bsp.tx,
 };
 
 pub fn enable_interrupt(IRQn: stm32.IRQn_Type) void {
@@ -451,22 +426,7 @@ pub fn main() !void {
     for ("\r\nuart active\r\n") |chr| {
         bsp.tx(chr);
     }
-
-    // stm32.GPIOB.MODER.modify(.{ .MODER3 = 2 });
-    // stm32.GPIOB.OSPEEDR.modify(.{ .OSPEEDR3 = 0b11 });
-    // stm32.GPIOB.AFRL.modify(.{ .AFRL3 = 0 });
-
-    itm.enable_itm();
-
-    for ("\r\nITM active\r\n") |chr| {
-        itm.ITM_SendChar(chr);
-    }
-    // for ("motor instanced\r\n") |chr| {
-    //     tx(chr);
-    // }
-
-    // var sp: f32 = 0;
-    // const sp_p: *volatile f32 = &sp;
+    itm.enable_itm(180000000, 2000000);
 
     motor_1.init();
     motor_1.enabled = true;
@@ -480,32 +440,25 @@ pub fn main() !void {
     stm32.cpu.enable_interrupts();
 
     while (true) {
-        var i: u32 = 0;
-        while (i < 800) {
-            asm volatile ("nop");
-            i += 1;
+        for ("ABCDEFG") |chr| {
+            var i: u32 = 0;
+            while (i < 80_000) {
+                asm volatile ("nop");
+                i += 1;
+            }
+            itm.ITM_SendChar(chr);
         }
 
         if (state) {
             // motor_1.enabled = true;
             motor_1.current_setpoint = .{ .q = 3.0 };
             state = false;
-            for ("\r\nITM current high\r\n") |chr| {
-                itm.ITM_SendChar(chr);
-            }
         } else {
             motor_1.current_setpoint = .{ .q = 0.0 };
             // motor_1.enabled = false;
             state = true;
-            for ("\r\nITM current low\r\n") |chr| {
-                itm.ITM_SendChar(chr);
-            }
         }
-
-        for ("starting loop\r\n") |chr| {
-            bsp.tx(chr);
-        }
-
+        // logger.debug("current: {}!", motor_1.current_setpoint.q);
         // motor_1.do_hfi();
     }
 }

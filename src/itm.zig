@@ -62,9 +62,14 @@ pub fn log(
 
 pub inline fn ITM_SendChar(chr: u8) void {
     // if ((ITM.TCR.read().ITMENA == 1)) {
-    while ((ITM.PORT[0].raw & 0x1) == 0) {
-        asm volatile ("nop");
+    var loops: usize = 0;
+    while (loops < 65535) : (loops += 1) {
+        if (ITM.PORT[0].raw != 0) break;
+        asm volatile ("" ::: "memory");
+    } else {
+        @panic("Stuck in spin loop");
     }
+
     const itm_stim_u8: *volatile u8 = @ptrCast(&ITM.PORT[0].raw);
     itm_stim_u8.* = chr;
 }

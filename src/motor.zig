@@ -461,8 +461,8 @@ pub fn main() !void {
             // motor_1.enabled = false;
             state = true;
         }
-        logger.info("about to print\n", .{});
-        printer.print("Starting loop!\n", .{}) catch {};
+        logger.err("about to print\n", .{0});
+        printer.print("printing from printer!\n", .{}) catch {};
         itm.static_print("print static Loop!\n");
         for ("Loop\r\n") |chr| {
             bsp.tx(chr);

@@ -33,9 +33,9 @@ pub fn Driver(
 
 pub fn BuildMotor(comptime timer_type: type) type {
     const silent_hfi = false;
-
-    const pwm_freq: f32 = 20000;
-    const TS: f32 = 1 / pwm_freq;
+    const core_clock = bsp.core_clock;
+    const pwm_freq: f32 = 40000;
+    const TS: f32 = 2 / pwm_freq;
     // const _1_TS: f32 = pwm_freq;
     const pi_type = PID.PID_const_Ts(TS, true);
 
@@ -60,8 +60,8 @@ pub fn BuildMotor(comptime timer_type: type) type {
         phase_resistance: f32 = 0.09,
         voltage_power_supply: f32 = 12,
         voltage_limit: f32 = 11,
-        hfi_v: f32 = 0.5,
-        amps_per_volt: f32 = 20.0,
+        hfi_v: f32 = 2.0,
+        amps_per_volt: f32 = 16.36,
         hfi_gain1: f32 = 750 * approx._2PI,
         hfi_gain2: f32 = 5 * approx._2PI,
         Ualpha: f32 = 0,
@@ -109,28 +109,29 @@ pub fn BuildMotor(comptime timer_type: type) type {
             // so it's 2xARR clocks per period
             // max clock config is 180MHz timer clock,
             // 180MHz / 20000 = (2*4500)
+            const arr = core_clock / pwm_freq / 2;
             self.tim.PSC.modify(.{ .PSC = 0 }); // prescaler
-            self.tim.ARR.modify(.{ .ARR = 4500 }); // auto-reload
+            self.tim.ARR.modify(.{ .ARR = arr }); // auto-reload
 
             // ch1
             self.tim.CCER.modify(.{ .CC1E = 0 }); // disable channel for config
             self.tim.CCMR1_Output.modify(.{ .OC1M = 0b111 }); // CCMR1.OCxM = 0b111 output is active while CNT > CCRx
             self.tim.CCMR1_Output.modify(.{ .CC1S = 0 }); // 0 -> CC1 is an output, channel must be disabled to write
-            // self.tim.CCMR1_Output.modify(.{ .OC1PE = 1 }); // enable CCR preload
+            self.tim.CCMR1_Output.modify(.{ .OC1PE = 1 }); // enable CCR preload
             self.tim.CCER.modify(.{ .CC1E = 1 }); // re-enable channel
             self.tim.CCER.modify(.{ .CC1NE = 1 }); // re-enable channel
 
             self.tim.CCER.modify(.{ .CC2E = 0 }); // disable channel for config
             self.tim.CCMR1_Output.modify(.{ .OC2M = 0b111 }); // CCMR1.OCxM = 0b111 output is active while CNT > CCRx
             self.tim.CCMR1_Output.modify(.{ .CC2S = 0 }); // 0 -> CC1 is an output, channel must be disabled to write
-            // self.tim.CCMR1_Output.modify(.{ .OC2PE = 1 }); // enable CCR preload
+            self.tim.CCMR1_Output.modify(.{ .OC2PE = 1 }); // enable CCR preload
             self.tim.CCER.modify(.{ .CC2E = 1 }); // re-enable channel
             self.tim.CCER.modify(.{ .CC2NE = 1 }); // re-enable channel
 
             self.tim.CCER.modify(.{ .CC3E = 0 }); // disable channel for config
             self.tim.CCMR2_Output.modify(.{ .OC3M = 0b111 }); // CCMR1.OCxM = 0b111 output is active while CNT > CCRx
             self.tim.CCMR2_Output.modify(.{ .CC3S = 0 }); // 0 -> CC1 is an output, channel must be disabled to write
-            // self.tim.CCMR2_Output.modify(.{ .OC3PE = 1 }); // enable CCR preload
+            self.tim.CCMR2_Output.modify(.{ .OC3PE = 1 }); // enable CCR preload
             self.tim.CCER.modify(.{ .CC3E = 1 }); // re-enable channel
             self.tim.CCER.modify(.{ .CC3NE = 1 }); // re-enable channel
 
@@ -250,7 +251,7 @@ pub fn BuildMotor(comptime timer_type: type) type {
             voltage_pid.q = self.PI_current_q.calc(self.current_err.q);
 
             self.voltage.d = voltage_pid.d;
-            self.voltage.d = voltage_pid.q;
+            self.voltage.q = voltage_pid.q;
 
             self.voltage.d += hfi_v_act;
 
@@ -323,8 +324,8 @@ pub fn BuildMotor(comptime timer_type: type) type {
             var out = val;
             if (val > upper_limit) {
                 out = upper_limit;
-            } else if (val < -lower_limit) {
-                out = -lower_limit;
+            } else if (val < lower_limit) {
+                out = lower_limit;
             }
             return out;
         }
@@ -366,12 +367,10 @@ pub const microzig_options = .{ //
         .HardFault = Handler{ .C = &HardFault },
         .ADC = Handler{ .C = &ADC_ISR },
     },
+    .logFn = bsp.log,
 };
 
-pub const std_options = .{
-    .log_level = .debug,
-    .logFn = itm.log,
-};
+// pub const std_options = .{ .log_level = .info, .logFn = bsp.log };
 
 pub fn enable_interrupt(IRQn: stm32.IRQn_Type) void {
     //     // __COMPILER_BARRIER();
@@ -420,14 +419,14 @@ pub fn main() !void {
     stm32.peripherals.FPU_CPACR.CPACR.modify(.{ .CP = 0b1111 });
     // stm32.cpu.peripherals.SysTick.CTRL.modify(.{ .ENABLE = 1 });
     bsp.init_rcc();
-    itm.enable_itm(180000000, 2000000);
+    itm.enable_itm(84000000, 2000000);
 
     bsp.init_gpio();
     bsp.init_uart();
     for ("\r\nuart active\r\n") |chr| {
         bsp.tx(chr);
     }
-    logger.info("UART up\n", .{});
+    // logger.info("UART up\n", .{});
 
     motor_1.init();
     motor_1.enabled = true;
@@ -436,37 +435,48 @@ pub fn main() !void {
     for ("starting loop\r\n") |chr| {
         bsp.tx(chr);
     }
-    const printer: itm.Writer = .{ .context = 0 };
+    // const printer: itm.Writer = .{ .context = 0 };
     // logger.info("Starting loop!\n", .{});
     // try printer.print("Starting loop!\n", .{});
-    itm.static_print("print static starting Loop!\n");
+    // itm.static_print("print static starting Loop!\n");
 
     // ADC_IRQn = 18
     enable_interrupt(stm32.IRQn_Type.ADC_IRQn);
     stm32.cpu.enable_interrupts();
 
+    motor_1.current_setpoint = .{ .q = 0.0 };
+
     while (true) {
         var i: u32 = 0;
-        while (i < 80_000) {
+        while (i < 5_000_000) {
             asm volatile ("nop");
             i += 1;
         }
 
         if (state) {
             // motor_1.enabled = true;
-            motor_1.current_setpoint = .{ .q = 3.0 };
+            motor_1.current_setpoint = .{ .q = 5.0 };
             state = false;
         } else {
-            motor_1.current_setpoint = .{ .q = 0.0 };
+            motor_1.current_setpoint = .{ .q = -5.0 };
             // motor_1.enabled = false;
             state = true;
         }
-        logger.err("about to print\n", .{0});
-        printer.print("printing from printer!\n", .{}) catch {};
-        itm.static_print("print static Loop!\n");
-        for ("Loop\r\n") |chr| {
-            bsp.tx(chr);
-        }
+        // std.log.info("el: {d:3}", .{motor_1.electrical_angle});
+        // const phase_currents = motor_1.getPhaseCurrents();
+        // const adc_vals = bsp.get_adc_vals();
+
+        std.log.info("el: {d:3}", .{motor_1.electrical_angle});
+        // std.log.info("phA current: {d:3}", .{phase_currents.a});
+        // std.log.info("adc[0]: {}", .{adc_vals[0]});
+        // printer.print("printing from printer!\n", .{}) catch {};
+        // itm.static_print("print static Loop!\n");
+        // const float_bytes: [4]u8 = @bitCast(motor_1.current_meas.d);
+        // for (float_bytes) |chr| {
+        //     bsp.tx(chr);
+        // }
+        // bsp.tx('1');
+        // bsp.tx('\n');
         // logger.debug("current: {}!", motor_1.current_setpoint.q);
         // motor_1.do_hfi();
     }

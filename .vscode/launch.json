@@ -8,12 +8,13 @@
         {
             "name": "Cortex Debug",
             "cwd": "${workspaceFolder}",
-            "executable": "${workspaceFolder}/zig-out/firmware/STM32F446.elf",
+            "executable": "${workspaceFolder}/zig-out/firmware/STM32F401.elf",
             "request": "launch",
             "type": "cortex-debug",
             "runToEntryPoint": "main",
-            "servertype": "stlink",
-            "svdFile": "${workspaceFolder}/hal/STM32F446.svd",
+            "servertype": "bmp",
+            "BMPGDBSerialPort": "127.0.0.1:2000",
+            "svdFile": "${workspaceFolder}/hal/STM32F401.svd",
         }
     ]
 }

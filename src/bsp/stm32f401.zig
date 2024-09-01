@@ -4,11 +4,13 @@ const builtin = @import("builtin");
 
 const stm32 = microzig.hal;
 
+pub const core_clock = 84_000_000;
+
 pub inline fn init_uart() void {
     stm32.RCC.APB1ENR.modify(.{ .USART2EN = 1 });
     // stm32.USART2.CR1.write_raw(0);
 
-    const usartdiv = @as(u16, @intCast(@divTrunc(45_000_000, 115_200)));
+    const usartdiv = @as(u16, @intCast(@divTrunc(42_000_000, 2_000_000)));
     stm32.USART2.BRR.write_raw(@as(u32, usartdiv));
     stm32.USART2.CR1.modify(.{ //
         .UE = 1,
@@ -126,12 +128,14 @@ pub inline fn init_rcc() void {
     // if using USB, we should use HSE instead of HSI
 
     // HSI ON
-    stm32.RCC.CR.modify(.{ .HSION = 1 });
+    stm32.RCC.CR.modify(.{ .HSION = 1, .HSEON = 1 });
+
     // PLLON = 0
     stm32.RCC.CR.modify(.{ .PLLON = 0 });
 
     // PLLM =  /16 - min value of 2, max 63
-    const PLLM: u6 = 25;
+    // use 16 for HSI and 25 for HSE
+    const PLLM: u6 = 16;
     stm32.RCC.PLLCFGR.modify(.{
         .PLLM0 = @as(u1, PLLM & 0b1),
         .PLLM1 = @as(u1, (PLLM >> 1) & 0b1),
@@ -187,14 +191,17 @@ pub inline fn init_rcc() void {
     // APB1 Prescaler = 2 - 0b100->2, 0b101->4
     stm32.RCC.CFGR.modify(.{ .PPRE1 = 0b100 });
 
-    // APB2 Prescaler = 4
-    stm32.RCC.CFGR.modify(.{ .PPRE2 = 0b100 });
+    // APB2 Prescaler = 1
+    stm32.RCC.CFGR.modify(.{ .PPRE2 = 0b000 });
 
     // wait for HSI Ready
     wait_for_flag(&stm32.RCC.CR, "HSIRDY");
+    wait_for_flag(&stm32.RCC.CR, "HSERDY");
 
     // now it's safe to change the sys clock source
     // PLL Source Mux = HSI
+    // 0 -> HSI
+    // 1 -> HSE
     stm32.RCC.PLLCFGR.modify(.{ .PLLSRC = 0 });
 
     // PLLON = 1
@@ -283,7 +290,7 @@ pub inline fn get_adc_vals() [2]u16 {
     const adc1_val = stm32.ADC1.JDR1.read().JDATA;
     const adc2_val = stm32.ADC1.JDR2.read().JDATA;
 
-    return [2]u16{ adc1_val, adc2_val };
+    return [2]u16{ adc2_val, adc1_val };
 }
 
 pub inline fn clear_adc_isr_flag() void {
@@ -293,4 +300,41 @@ pub inline fn clear_adc_isr_flag() void {
 pub inline fn benchmark_toggle() void {
     stm32.GPIOC.ODR.modify(.{ .ODR14 = 1 });
     stm32.GPIOC.ODR.modify(.{ .ODR14 = 0 });
+}
+
+const WriteError = error{};
+pub const Writer = std.io.Writer(c_uint, WriteError, struct {
+    pub fn write(context: c_uint, payload: []const u8) WriteError!usize {
+        _ = context;
+        for (payload) |chr| {
+            tx(chr);
+        }
+        return payload.len;
+    }
+}.write);
+
+var default_log_writter: Writer = .{ .context = 0 };
+
+pub fn log(
+    comptime level: std.log.Level,
+    comptime scope: @TypeOf(.EnumLiteral),
+    comptime format: []const u8,
+    args: anytype,
+) void {
+    // Need to have Clock config nailed down and stored at comptime before this really works.
+    // const state = struct {
+    //     var init = false;
+    // };
+
+    // if (!state.init) {
+    //     enable_itm();
+    //     state.init = true;
+    // }
+    const level_prefix = comptime "[{}.{:0>6}] " ++ level.asText();
+    const prefix = comptime level_prefix ++ switch (scope) {
+        .default => ": ",
+        else => " (" ++ @tagName(scope) ++ "): ",
+    };
+
+    default_log_writter.print(prefix ++ format ++ "\r\n", .{ 0, 0 } ++ args) catch {};
 }

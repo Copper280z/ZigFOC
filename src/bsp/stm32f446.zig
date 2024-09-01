@@ -4,6 +4,8 @@ const builtin = @import("builtin");
 
 const stm32 = microzig.hal;
 
+pub const core_clock = 180_000_000;
+
 pub inline fn init_uart() void {
     stm32.RCC.APB1ENR.modify(.{ .USART2EN = 1 });
     // stm32.USART2.CR1.write_raw(0);
@@ -257,4 +259,34 @@ pub inline fn clear_adc_isr_flag() void {
 pub inline fn benchmark_toggle() void {
     stm32.GPIOC.ODR.modify(.{ .ODR10 = 1 });
     stm32.GPIOC.ODR.modify(.{ .ODR10 = 0 });
+}
+
+const WriteError = error{};
+pub const Writer = std.io.Writer(c_uint, WriteError, struct {
+    pub fn write(context: c_uint, payload: []const u8) WriteError!usize {
+        _ = context;
+        for (payload) |chr| {
+            tx(chr);
+        }
+        return payload.len;
+    }
+}.write);
+
+var default_log_writter: Writer = .{ .context = 0 };
+
+pub fn log(
+    comptime level: std.log.Level,
+    comptime scope: @TypeOf(.EnumLiteral),
+    comptime format: []const u8,
+    args: anytype,
+) void {
+    const level_prefix = comptime "[{}.{:0>6}] " ++ level.asText();
+    const prefix = comptime level_prefix ++ switch (scope) {
+        .default => ": ",
+        else => " (" ++ @tagName(scope) ++ "): ",
+    };
+    for (format) |chr| {
+        tx(chr);
+    }
+    default_log_writter.print(prefix ++ format ++ "\r\n", .{ 0, 0 } ++ args) catch {};
 }

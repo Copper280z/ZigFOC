@@ -5,20 +5,41 @@ const mmio = microzig.mmio;
 pub const peripherals = microzig.chip.peripherals;
 
 pub fn enable_itm(cpu_freq: u32, baud: u32) void {
-    const SWOPrescaler = (cpu_freq / baud) - 1;
-    CoreDebug.DEMCR.raw = 1 << 24;
-    peripherals.DBG.DBGMCU_CR.raw = 0x27;
-
-    TPIU.SPPR.modify(.{ .TXMODE = 0x2 });
-
-    TPIU.ACPR.modify(.{ .SWOSCALER = @as(u16, @intCast(SWOPrescaler)) });
-
-    ITM.LAR.raw = 0xC5ACCE55;
-    ITM.TCR.modify(.{ .SYNCENA = 1, .ITMENA = 1, .TraceBusID = 1 });
-    ITM.TPR.raw = 0xFFFFFFFF;
     ITM.TER.raw = 0x1;
-    DWT.CTRL.raw = 0x400003FE;
-    TPIU.FFCR.raw = 0x100;
+    CoreDebug.DEMCR.raw = 1 << 24;
+    _ = cpu_freq;
+    _ = baud;
+    // const SWOPrescaler = (cpu_freq / baud) - 1;
+    // peripherals.DBG.DBGMCU_CR.raw = 0x27;
+
+    // TPIU.SPPR.modify(.{ .TXMODE = 0x2 });
+
+    // TPIU.ACPR.modify(.{ .SWOSCALER = @as(u16, @intCast(SWOPrescaler)) });
+
+    // ITM.LAR.raw = 0xC5ACCE55;
+    // ITM.TCR.modify(.{ .SYNCENA = 1, .ITMENA = 1, .TraceBusID = 1 });
+    // ITM.TPR.raw = 0xFFFFFFFF;
+    // DWT.CTRL.raw = 0x400003FE;
+    // TPIU.FFCR.raw = 0x100;
+}
+// pub fn enable_itm(cpu_freq: u32, baud: u32) void {
+//     const SWOPrescaler = (cpu_freq / baud) - 1;
+//     CoreDebug.DEMCR.raw = 1 << 24;
+//     peripherals.DBG.DBGMCU_CR.raw = 0x27;
+
+//     TPIU.SPPR.modify(.{ .TXMODE = 0x2 });
+
+//     TPIU.ACPR.modify(.{ .SWOSCALER = @as(u16, @intCast(SWOPrescaler)) });
+
+//     ITM.LAR.raw = 0xC5ACCE55;
+//     ITM.TCR.modify(.{ .SYNCENA = 1, .ITMENA = 1, .TraceBusID = 1 });
+//     ITM.TPR.raw = 0xFFFFFFFF;
+//     ITM.TER.raw = 0x1;
+//     DWT.CTRL.raw = 0x400003FE;
+//     TPIU.FFCR.raw = 0x100;
+// }
+pub fn ITM_EnableChannel(ch: u5) void {
+    ITM.TER.raw |= @as(u32, 0x1) << ch;
 }
 
 const WriteError = error{};
@@ -26,7 +47,7 @@ pub const Writer = std.io.Writer(c_uint, WriteError, struct {
     pub fn write(context: c_uint, payload: []const u8) WriteError!usize {
         _ = context;
         for (payload) |chr| {
-            ITM_SendChar(chr);
+            ITM_SendChar(0, chr);
         }
         return payload.len;
     }
@@ -40,6 +61,8 @@ pub fn log(
     comptime format: []const u8,
     args: anytype,
 ) void {
+    _ = level;
+    _ = scope;
     // Need to have Clock config nailed down and stored at comptime before this really works.
     // const state = struct {
     //     var init = false;
@@ -49,34 +72,36 @@ pub fn log(
     //     enable_itm();
     //     state.init = true;
     // }
-    const level_prefix = comptime "[{}.{:0>6}] " ++ level.asText();
-    const prefix = comptime level_prefix ++ switch (scope) {
-        .default => ": ",
-        else => " (" ++ @tagName(scope) ++ "): ",
-    };
-    for (format) |chr| {
-        ITM_SendChar(chr);
-    }
-    default_log_writter.print(prefix ++ format ++ "\r\n", .{ 0, 0 } ++ args) catch {};
+    // const level_prefix = comptime "[{}.{:0>6}] " ++ level.asText();
+    // const clock = DWT.CYCCNT.raw;
+    // const level_prefix = comptime "[{}]" ++ level.asText();
+    // const prefix = comptime level_prefix ++ switch (scope) {
+    //     .default => ": ",
+    //     else => " (" ++ @tagName(scope) ++ "): ",
+    // };
+    // default_log_writter.print(prefix ++ format ++ "\r\n", .{clock} ++ args) catch {};
+    default_log_writter.print(format ++ "\r\n", args) catch {};
 }
 
-pub inline fn ITM_SendChar(chr: u8) void {
+pub inline fn ITM_SendChar(port: u32, chr: anytype) void {
     // if ((ITM.TCR.read().ITMENA == 1)) {
+
     var loops: usize = 0;
     while (loops < 65535) : (loops += 1) {
-        if (ITM.PORT[0].raw != 0) break;
+        const itm_stim_u8: *volatile @TypeOf(chr) = @ptrCast(&ITM.PORT[port].raw);
+        if (itm_stim_u8.* != 0) break;
         asm volatile ("" ::: "memory");
     } else {
         @panic("Stuck in spin loop");
     }
 
-    const itm_stim_u8: *volatile u8 = @ptrCast(&ITM.PORT[0].raw);
+    const itm_stim_u8: *volatile @TypeOf(chr) = @ptrCast(&ITM.PORT[port].raw);
     itm_stim_u8.* = chr;
 }
 
 pub inline fn static_print(msg: []const u8) void {
     for (msg) |chr| {
-        ITM_SendChar(chr);
+        ITM_SendChar(0, chr);
     }
 }
 

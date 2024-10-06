@@ -9,8 +9,7 @@ const build_root = root();
 const KiB = 1024;
 
 const targets = [_]Example{
-    .{ .target = f446re, .name = "STM32F446", .file = "src/motor.zig", .board_name = "f446_board", .bsp_file = "src/bsp/stm32f446.zig" },
-    .{ .target = f401cc, .name = "STM32F401", .file = "src/motor.zig", .board_name = "f401_board", .bsp_file = "src/bsp/stm32f401.zig" },
+    .{ .target = Orbmule, .name = "Orbmule", .file = "src/main.zig", .board_name = "orbmule", .bsp_file = "src/bsp/stm32f730.zig" },
 };
 
 pub fn build(b: *std.Build) void {
@@ -54,38 +53,43 @@ const Example = struct {
     bsp_file: []const u8,
 };
 
-pub const f401cc = MicroZig.Target{
+pub const Orbmule = MicroZig.Target{
     .preferred_format = .elf,
     .chip = .{
-        .name = "STM32F401",
-        .cpu = MicroZig.cpus.cortex_m4f,
+        .name = "STM32F730",
+        .cpu = cortex_m7f,
         .memory_regions = &.{
-            .{ .offset = 0x08000000, .length = 256 * KiB, .kind = .flash },
-            .{ .offset = 0x20000000, .length = 64 * KiB, .kind = .ram },
+            .{ .offset = 0x08000000, .length = 64 * KiB, .kind = .flash },
+            .{ .offset = 0x20000000, .length = 256 * KiB, .kind = .ram },
         },
         .register_definition = .{
-            .svd = .{ .cwd_relative = build_root ++ "/hal/STM32F401.svd" },
+            .svd = .{ .cwd_relative = build_root ++ "/hal/STM32F730.svd" },
         },
     },
     .hal = .{
-        .root_source_file = .{ .cwd_relative = build_root ++ "/hal/STM32F401.zig" },
+        .root_source_file = .{ .cwd_relative = build_root ++ "/hal/STM32F730.zig" },
     },
 };
 
-pub const f446re = MicroZig.Target{
-    .preferred_format = .elf,
-    .chip = .{
-        .name = "STM32F446",
-        .cpu = MicroZig.cpus.cortex_m4f,
-        .memory_regions = &.{
-            .{ .offset = 0x08000000, .length = 512 * KiB, .kind = .flash },
-            .{ .offset = 0x20000000, .length = 128 * KiB, .kind = .ram },
-        },
-        .register_definition = .{
-            .svd = .{ .cwd_relative = build_root ++ "/hal/STM32F446.svd" },
-        },
+pub const cortex_m7 = MicroZig.Cpu{
+    .name = "ARM Cortex-M7",
+    .root_source_file = .{ .cwd_relative = "../microzig/core/src/cpus/cortex_m.zig" },
+    .target = std.Target.Query{
+        .cpu_arch = .thumb,
+        .cpu_model = .{ .explicit = &std.Target.arm.cpu.cortex_m7 },
+        .os_tag = .freestanding,
+        .abi = .eabi,
     },
-    .hal = .{
-        .root_source_file = .{ .cwd_relative = build_root ++ "/hal/STM32F446.zig" },
+};
+
+pub const cortex_m7f = MicroZig.Cpu{
+    .name = "ARM Cortex-M7F",
+    .root_source_file = .{ .cwd_relative = "../microzig/core/src/cpus/cortex_m.zig" },
+    .target = std.zig.CrossTarget{
+        .cpu_arch = .thumb,
+        .cpu_model = .{ .explicit = &std.Target.arm.cpu.cortex_m7 },
+        .cpu_features_add = std.Target.arm.featureSet(&.{.fp_armv8d16sp}),
+        .os_tag = .freestanding,
+        .abi = .eabihf,
     },
 };

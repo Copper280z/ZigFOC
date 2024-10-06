@@ -5,6 +5,30 @@ const builtin = @import("builtin");
 const stm32 = microzig.hal;
 
 pub const core_clock = 84_000_000;
+//
+// 1. Set the DFF bit to define 8- or 16-bit data frame format
+// 2. Select the CPOL and CPHA bits to define one of the four relationships between the
+// data transfer and the serial clock (see Figure 194). For correct data transfer, the CPOL
+// and CPHA bits must be configured in the same way in the slave device and the master
+// device. This step is not required when the TI mode is selected through the FRF bit in
+// the SPI_CR2 register.
+// 3. The frame format (MSB-first or LSB-first depending on the value of the LSBFIRST bit in
+// the SPI_CR1 register) must be the same as the master device. This step is not
+// required when TI mode is selected.
+// 4. In Hardware mode (refer to Slave select (NSS) pin management), the NSS pin must be
+// connected to a low level signal during the complete byte transmit sequence. In NSS
+// software mode, set the SSM bit and clear the SSI bit in the SPI_CR1 register. This step
+// is not required when TI mode is selected.
+// 5. Set the FRF bit in the SPI_CR2 register to select the TI mode protocol for serial
+// communications.
+// 6. Clear the MSTR bit and set the SPE bit (both in the SPI_CR1 register) to assign the
+// pins to alternate function
+
+pub inline fn init_spi() void {
+    stm32.RCC.APB1ENR.modify(.{ .SPI2EN = 1, .SPI3EN = 1 });
+    stm32.RCC.APB2ENR.modify(.{ .SPI1EN = 1, .SPI4EN = 1 });
+    stm32.SPI1.CR1.modify(.{});
+}
 
 pub inline fn init_uart() void {
     stm32.RCC.APB1ENR.modify(.{ .USART2EN = 1 });

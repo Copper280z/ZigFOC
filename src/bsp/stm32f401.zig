@@ -271,6 +271,7 @@ pub fn init_adc() void {
         stm32.ADC1.SMPR2.write_raw(smpr2_val);
     }
 
+    // PA4 would be a good option for VBus sensing
     stm32.GPIOA.MODER.modify(.{ //
         .MODER0 = 0b11,
         .MODER1 = 0b11,

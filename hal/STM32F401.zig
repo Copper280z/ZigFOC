@@ -2,6 +2,8 @@
 
 const std = @import("std");
 const micro = @import("microzig");
+const usb_impl = @import("usb.zig");
+
 pub const cpu = micro.cpu;
 pub const interrupt = micro.interrupt;
 pub const chip = micro.chip;

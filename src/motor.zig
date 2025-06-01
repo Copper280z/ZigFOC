@@ -362,10 +362,10 @@ fn ADC_ISR() callconv(.C) void {
     bsp.clear_adc_isr_flag();
 }
 
-pub const microzig_options = .{ //
+pub const microzig_options: microzig.Options = .{ //
     .interrupts = .{
-        .HardFault = Handler{ .C = &HardFault },
-        .ADC = Handler{ .C = &ADC_ISR },
+        .HardFault = Handler{ .c = &HardFault },
+        .ADC = Handler{ .c = &ADC_ISR },
     },
     .logFn = bsp.log,
 };
@@ -442,7 +442,7 @@ pub fn main() !void {
 
     // ADC_IRQn = 18
     enable_interrupt(stm32.IRQn_Type.ADC_IRQn);
-    stm32.cpu.enable_interrupts();
+    stm32.cpu.interrupt.enable_interrupts();
 
     motor_1.current_setpoint = .{ .q = 0.0 };
 
